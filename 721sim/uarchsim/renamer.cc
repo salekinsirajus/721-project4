@@ -17,8 +17,7 @@ renamer::renamer(uint64_t n_log_regs,
     //initialize the data structures
     map_table_size = n_log_regs;
     num_phys_reg = n_phys_regs;
-    rmt = new uint64_t[n_log_regs]; 
-    amt = new uint64_t[n_log_regs];
+    rmt = new uint64_t[n_log_regs];
     prf = new uint64_t[n_phys_regs];
     prf_ready = new uint64_t[n_phys_regs];
     shadow_map_table_size = n_log_regs;
@@ -35,23 +34,21 @@ renamer::renamer(uint64_t n_log_regs,
     //amt[1] = 1,..., amt[n] = n indicate r0->p0, r1->p1,..
     //the contents of the prf does not matter I suppose.
     for (j=0; j < n_log_regs; j++){
-        amt[n_log_regs - 1 - j] = j;
         rmt[n_log_regs - 1 - j] = j;
     }
 
-    //active list
-    active_list_size = n_active;
-    al.list = new al_entry[n_active]; 
-    al.head = 0;
-    al.tail = 0;
-    al.head_phase = 0;
-    al.tail_phase = 0;    
-    assert(active_list_is_empty());
-
-    for (j=0; j<n_active; j++){
-        init_al_entry(&al.list[j]);
+    //checkpoint buffer
+     chkpt_buffer_head = 0;
+     chkpt_buffer_tail = 0;
+     chkpt_buffer_head_phase = 0;
+     chkpt_buffer_tail_phase = 0;
+    num_checkpoints = 8;  //CHANGE THIS TO COMMAND LINE ARG LATER
+    checkpoint_buffer = new chkpt[num_checkpoints];
+    for (int k=0; k < n_log_regs; k++){
+        checkpoint_buffer[chkpt_buffer_head].rmt[k] = rmt[k];
     }
-    
+
+
     //free list; free_list_size = prf - n_log_regs (721ss-prf-2 slide, p19)
     free_list_size = n_phys_regs - n_log_regs;
     fl.list = new uint64_t[free_list_size];
@@ -68,10 +65,7 @@ renamer::renamer(uint64_t n_log_regs,
         fl.list[i] = n_log_regs + i;
     }
 
-    //checkpoint stuff
-    GBM = 0;
-    num_checkpoints = n_branches;
-    checkpoints = new checkpoint_t[num_checkpoints];
+
 }
 
 bool renamer::stall_reg(uint64_t bundle_dst){

@@ -18,7 +18,7 @@ private:
     // Structure 2: Architectural Map Table
     // Entry contains: physical register mapping
     /////////////////////////////////////////////////////////////////////
-    uint64_t *amt;
+
 
     uint64_t map_table_size; //AMT and RMT size
     /////////////////////////////////////////////////////////////////////
@@ -80,31 +80,6 @@ private:
     // Notes:
     // * Structure includes head, tail, and their phase bits.
     /////////////////////////////////////////////////////////////////////
-    typedef struct al_entry_t{
-        bool           has_dest;
-        uint64_t        logical;
-        uint64_t       physical;
-        bool          completed;
-        bool          exception;
-        bool     load_violation;
-        bool      br_mispredict;
-        bool     val_mispredict;
-        bool            is_load;
-        bool           is_store;
-        bool          is_branch;
-        bool             is_amo;
-        bool             is_csr;
-        uint64_t             pc;
-    } al_entry;
-
-    typedef struct active_list_t {
-        uint64_t head, head_phase;
-        uint64_t tail, tail_phase;
-        al_entry_t *list;
-    }active_list;
-    //TODO: verify this works
-    active_list al;
-    uint64_t active_list_size;
 
 
     /////////////////////////////////////////////////////////////////////
@@ -183,6 +158,21 @@ private:
     uint64_t num_checkpoints;
 
     checkpoint_t *checkpoints;
+
+    typedef struct chkpt_t{
+        uint64_t *rmt;
+        uint64_t load_counter;
+        uint64_t store_counter;
+        uint64_t branch_counter;
+        uint64_t *unmapped_bits;
+    }chkpt;
+
+    chkpt *checkpoint_buffer;
+    uint64_t chkpt_buffer_head;
+    uint64_t chkpt_buffer_tail;
+    uint64_t chkpt_buffer_head_phase;
+    uint64_t chkpt_buffer_tail_phase;
+
 
     /////////////////////////////////////////////////////////////////////
     // Private functions.
