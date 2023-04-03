@@ -143,10 +143,11 @@ void pipeline_t::dispatch() {
       amo_flag = IS_AMO(PAY.buf[index].flags);
       csr_flag = IS_CSR(PAY.buf[index].flags);
       //Calling the dispatch function and updating payload's AL index with return value
-      PAY.buf[index].AL_index = REN->dispatch_inst(dest_valid, PAY.buf[index].C_log_reg,
-        PAY.buf[index].C_phys_reg, load_flag, store_flag, branch_flag,
-        amo_flag, csr_flag, PAY.buf[index].pc
-      );
+      //TODO: replace the AL_index with a mask
+      //PAY.buf[index].AL_index = REN->dispatch_inst(dest_valid, PAY.buf[index].C_log_reg,
+      //PAY.buf[index].C_phys_reg, load_flag, store_flag, branch_flag,
+      //amo_flag, csr_flag, PAY.buf[index].pc
+      //
       // FIX_ME #7 END
 
       // FIX_ME #8
