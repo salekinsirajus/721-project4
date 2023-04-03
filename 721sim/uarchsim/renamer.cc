@@ -3,6 +3,7 @@
 #include "renamer.h"
 #include <cassert>
 
+//this is a new comment
 renamer::renamer(uint64_t n_log_regs,
         uint64_t n_phys_regs,
         uint64_t n_branches,
