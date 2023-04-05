@@ -5,7 +5,7 @@
 
 renamer::renamer(uint64_t n_log_regs,
         uint64_t n_phys_regs,
-        uint64_t n_branches,
+        uint64_t n_chkpts,
         uint64_t n_active){
     
     //Run the assertions
@@ -50,7 +50,7 @@ renamer::renamer(uint64_t n_log_regs,
     chkpt_buffer_tail = 0;
     chkpt_buffer_head_phase = 0;
     chkpt_buffer_tail_phase = 0;
-    num_checkpoints = 8;  //CHANGE THIS TO COMMAND LINE ARG LATER
+    num_checkpoints = n_chkpts;  //CHANGE THIS TO COMMAND LINE ARG LATER
 
     checkpoint_buffer = new chkpt[num_checkpoints];
     uint64_t i;
