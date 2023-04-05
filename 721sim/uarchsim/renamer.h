@@ -97,6 +97,8 @@ private:
     // Entry contains: ready bit
     /////////////////////////////////////////////////////////////////////
     uint64_t *prf_ready;
+    uint64_t *prf_usage_counter;
+    uint64_t *prf_unmapped;
 
     uint64_t num_phys_reg;
 

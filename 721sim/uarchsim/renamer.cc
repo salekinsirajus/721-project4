@@ -19,13 +19,10 @@ renamer::renamer(uint64_t n_log_regs,
     rmt = new uint64_t[n_log_regs];
     prf = new uint64_t[n_phys_regs];
     prf_ready = new uint64_t[n_phys_regs];
+    prf_usage_counter = new uint64_t[n_phys_regs];
+    prf_unmapped = new uint64_t[n_phys_regs];
 
     uint64_t j;
-    //setting the ready bits to 1 (meaning no pending registers)
-    for (j=0; j < n_phys_regs; j++){
-        prf_ready[j] = 1;
-    }
-
     //AMT and RMT should have the same value at the beginning
     //However, not sure what would the content be. if amt[0] = 0, amt[1] = 0
     //then all the logical registers are mapped to p0. OTOH, amt[0] = 0 and
@@ -35,17 +32,48 @@ renamer::renamer(uint64_t n_log_regs,
         rmt[n_log_regs - 1 - j] = j;
     }
 
+    //initializing the physical register files to be consistent with
+    //an empty pipeline state
+    for (j=0; j < n_phys_regs; j++){
+        prf_ready[j] = 1;
+        if (reg_in_rmt(j)){
+            prf_unmapped[j] = 0;
+        } else {
+            prf_unmapped[j] = 1;
+        }
+        prf_usage_counter[j] = 0;
+    }
+
+
     //checkpoint buffer
     chkpt_buffer_head = 0;
     chkpt_buffer_tail = 0;
     chkpt_buffer_head_phase = 0;
     chkpt_buffer_tail_phase = 0;
     num_checkpoints = 8;  //CHANGE THIS TO COMMAND LINE ARG LATER
+
     checkpoint_buffer = new chkpt[num_checkpoints];
-    for (int k=0; k < n_log_regs; k++){
+    uint64_t i;
+    for (i = 0; i < num_checkpoints; i++){
+        checkpoint_buffer[i].rmt = new uint64_t[n_log_regs];
+        checkpoint_buffer[i].unmapped_bits = new uint64_t[n_phys_regs];
+        checkpoint_buffer[i].load_counter = 0;
+        checkpoint_buffer[i].store_counter = 0;
+        checkpoint_buffer[i].branch_counter = 0;
+    }
+
+    //populating the first checkpoint
+    uint64_t k;
+    for (k=0; k < n_log_regs; k++){
         checkpoint_buffer[chkpt_buffer_head].rmt[k] = rmt[k];
     }
 
+    for (j=0; j < n_phys_regs; j++){
+        checkpoint_buffer[chkpt_buffer_head].unmapped_bits[j] = prf_unmapped[j];
+    }
+
+    //move the checkpoint tail ahead
+    chkpt_buffer_tail++;
 
     //free list; free_list_size = prf - n_log_regs (721ss-prf-2 slide, p19)
     free_list_size = n_phys_regs - n_log_regs;
@@ -58,7 +86,6 @@ renamer::renamer(uint64_t n_log_regs,
 
     //Free list contains registers that are not allocated or committed
     //i.e. registers that are not in AMT or RMT.
-    uint64_t i;
     for (i=0; i <free_list_size; i++){
         fl.list[i] = n_log_regs + i;
     }
