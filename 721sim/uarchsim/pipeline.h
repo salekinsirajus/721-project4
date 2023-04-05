@@ -389,6 +389,9 @@ public:
 	uint64_t num_insn;
 	uint64_t num_insn_split;
 
+    //cpr related stuff
+    uint64_t max_instr_bw_checkpoints;
+    uint64_t instr_renamed_since_last_checkpoint;
 
 	// Functions for pipeline stages.
 	void fetch();
