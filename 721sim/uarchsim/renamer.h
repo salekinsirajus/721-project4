@@ -199,19 +199,6 @@ public:
     /////////////////////////////////////////////////////////////////////
     bool stall_reg(uint64_t bundle_dst);
 
-    /////////////////////////////////////////////////////////////////////
-    // The Rename Stage must stall if there aren't enough free
-    // checkpoints for all branches in the current rename bundle.
-    //
-    // Inputs:
-    // 1. bundle_branch: number of branches in current rename bundle
-    //
-    // Return value:
-    // Return "true" (stall) if there aren't enough free checkpoints
-    // for all branches in the current rename bundle.
-    /////////////////////////////////////////////////////////////////////
-    bool stall_branch(uint64_t bundle_branch);
-
 
     /////////////////////////////////////////////////////////////////////
     // This function is used to rename a single source register.
@@ -262,20 +249,6 @@ public:
     //////////////////////////////////////////
     // Functions related to Dispatch Stage. //
     //////////////////////////////////////////
-
-    /////////////////////////////////////////////////////////////////////
-    // The Dispatch Stage must stall if there are not enough free
-    // entries in the Active List for all instructions in the current
-    // dispatch bundle.
-    //
-    // Inputs:
-    // 1. bundle_inst: number of instructions in current dispatch bundle
-    //
-    // Return value:
-    // Return "true" (stall) if the Active List does not have enough
-    // space for all instructions in the dispatch bundle.
-    /////////////////////////////////////////////////////////////////////
-    bool stall_dispatch(uint64_t bundle_inst);
 
 
     /////////////////////////////////////////////////////////////////////

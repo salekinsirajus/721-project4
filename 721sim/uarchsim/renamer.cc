@@ -3,7 +3,6 @@
 #include "renamer.h"
 #include <cassert>
 
-//this is a new comment
 renamer::renamer(uint64_t n_log_regs,
         uint64_t n_phys_regs,
         uint64_t n_branches,
@@ -20,7 +19,6 @@ renamer::renamer(uint64_t n_log_regs,
     rmt = new uint64_t[n_log_regs];
     prf = new uint64_t[n_phys_regs];
     prf_ready = new uint64_t[n_phys_regs];
-    shadow_map_table_size = n_log_regs;
 
     uint64_t j;
     //setting the ready bits to 1 (meaning no pending registers)
@@ -38,10 +36,10 @@ renamer::renamer(uint64_t n_log_regs,
     }
 
     //checkpoint buffer
-     chkpt_buffer_head = 0;
-     chkpt_buffer_tail = 0;
-     chkpt_buffer_head_phase = 0;
-     chkpt_buffer_tail_phase = 0;
+    chkpt_buffer_head = 0;
+    chkpt_buffer_tail = 0;
+    chkpt_buffer_head_phase = 0;
+    chkpt_buffer_tail_phase = 0;
     num_checkpoints = 8;  //CHANGE THIS TO COMMAND LINE ARG LATER
     checkpoint_buffer = new chkpt[num_checkpoints];
     for (int k=0; k < n_log_regs; k++){
@@ -197,10 +195,6 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
     }
    
     assert(old != this->rmt[log_reg]);
-    if (this->reg_in_amt(result)){
-            printf("%lu (popped from freelist) is already in AMT\n", result);
-            exit(EXIT_FAILURE);
-    }
 
     return result;
 }
@@ -232,34 +226,9 @@ void renamer::write(uint64_t phys_reg, uint64_t value){
 }
 
 void renamer::set_complete(uint64_t AL_index){
-    this->al.list[AL_index].completed = true; 
+    //TODO: reimplement for CPR
 }
 
-bool renamer::stall_branch(uint64_t bundle_branch){
-    uint64_t gbm = this->GBM;
-    //simple use case, all taken, DO STALL
-    if (gbm == UINT64_MAX) return true;
-
-    uint64_t free_count=0;
-    uint64_t n = num_checkpoints;
-    uint64_t mask = 1;
-    
-    uint64_t i;
-    for (i=0; i<n; i++){
-        if (gbm & mask){
-            mask <<= 1;
-        } else {
-            mask <<= 1;
-            free_count++;
-        }
-    }
-
-    //not enough space, DO STALL
-    if (free_count < bundle_branch) return true;
-    
-    //free_count >= bundle_branch, enough space available. DONT STALL
-    return false;
-} 
 
 bool renamer::precommit(bool &completed,
                         bool &exception, bool &load_viol, bool &br_misp,
@@ -278,35 +247,7 @@ void renamer::commit(){
 
 
 void renamer::resolve(uint64_t AL_index, uint64_t branch_ID, bool correct){
-    if (correct){ //branch was predicted correctly
-        //clear the GBM bit by indexing with branch_ID
-        this->GBM  &= ~(1ULL<<branch_ID);
-        //clear all the checkpointed GBMs;
-        uint64_t i;
-        for (i=0; i < num_checkpoints; i++){
-            this->checkpoints[i].gbm &= ~(1ULL<<branch_ID);
-        } 
-
-    } else {
-        // In the case of a misprediction:
-        // * Restore the GBM from the branch's checkpoint. Also make sure the
-        //   mispredicted branch's bit is cleared in the restored GBM,
-        //   since it is now resolved and its bit and checkpoint are freed.
-        uint64_t misp_gbm = this->checkpoints[branch_ID].gbm;
-        misp_gbm  &= ~(1ULL<<branch_ID);
-        this->GBM = misp_gbm;
-
-        // * Restore the RMT using the branch's checkpoint.
-        uint64_t i;
-        for (i=0; i < this->shadow_map_table_size; i++){
-            this->rmt[i] = this->checkpoints[branch_ID].shadow_map_table[i]; 
-        }
-        // * Restore the Free List head pointer and its phase bit,
-        //   using the branch's checkpoint.
-        this->fl.head = this->checkpoints[branch_ID].free_list_head;
-        this->fl.head_phase =this->checkpoints[branch_ID].free_list_head_phase;
-
-    }
+    //TODO: reimplement for CPR
 }
 
 
