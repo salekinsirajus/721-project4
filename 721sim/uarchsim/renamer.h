@@ -132,6 +132,9 @@ private:
     uint64_t pop_free_list();
     int free_list_regs_available();
     void restore_free_list();
+    uint64_t get_free_checkpoint_count();
+    bool checkpoint_buffer_is_empty();
+    bool checkpoint_buffer_is_full();
 
     /*
     void print_free_list();
@@ -247,6 +250,10 @@ public:
     // 3. checkpointed GBM
     /////////////////////////////////////////////////////////////////////
     void checkpoint();
+
+
+    //whether or not to stall rename due to insufficent checkpoints
+    bool stall_checkpoint(uint64_t bundle_chkpt);
 
     //////////////////////////////////////////
     // Functions related to Dispatch Stage. //

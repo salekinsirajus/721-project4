@@ -10,7 +10,7 @@ renamer::renamer(uint64_t n_log_regs,
     
     //Run the assertions
     assert(n_phys_regs > n_log_regs);
-    assert((1 <= n_branches) && (n_branches <= 64));
+    //assert((0 <= n_branches) && (n_branches <= 64)); //TODO: is there anything like that for CPR
     assert(n_active > 0);
   
     //initialize the data structures
@@ -66,6 +66,9 @@ renamer::renamer(uint64_t n_log_regs,
     uint64_t k;
     for (k=0; k < n_log_regs; k++){
         checkpoint_buffer[chkpt_buffer_head].rmt[k] = rmt[k];
+        //increameting the usage counter of the prf since we're checkpointing
+        //the RMT at this location
+        prf_usage_counter[rmt[k]] += 1;
     }
 
     for (j=0; j < n_phys_regs; j++){
@@ -90,7 +93,6 @@ renamer::renamer(uint64_t n_log_regs,
         fl.list[i] = n_log_regs + i;
     }
 
-
 }
 
 bool renamer::stall_reg(uint64_t bundle_dst){
@@ -107,6 +109,57 @@ bool renamer::stall_reg(uint64_t bundle_dst){
     return false;
 }
 
+bool renamer::checkpoint_buffer_is_empty(){
+    if ((this->chkpt_buffer_head == this->chkpt_buffer_tail) && 
+        (this->chkpt_buffer_head_phase == this->chkpt_buffer_tail_phase)){
+
+        return true;
+    }
+
+    return false;
+}
+
+bool renamer::checkpoint_buffer_is_full(){
+    if ((this->chkpt_buffer_head == this->chkpt_buffer_tail) && 
+        (this->chkpt_buffer_head_phase != this->chkpt_buffer_tail_phase)){
+
+        return true;
+    }
+
+    return false;
+    
+}
+
+uint64_t renamer::get_free_checkpoint_count(){
+    if (checkpoint_buffer_is_full()) return 0;
+    if (checkpoint_buffer_is_empty()) return num_checkpoints;
+     
+    int used, free;
+    if (this->chkpt_buffer_head_phase == this->chkpt_buffer_tail_phase){
+        assert(this->chkpt_buffer_tail > this->chkpt_buffer_head);
+        used = this->chkpt_buffer_tail - this->chkpt_buffer_head;
+        free = this->num_checkpoints - used;
+        return free;
+    }
+
+    else if (this->chkpt_buffer_head_phase != this->chkpt_buffer_tail_phase){
+        assert(this->chkpt_buffer_head > this->chkpt_buffer_tail);
+        free = this->chkpt_buffer_head - this->chkpt_buffer_tail; 
+        return free;
+    }
+
+    // inconsistent state
+    return -1; 
+}
+
+bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
+    //Get the number of available checkpoints
+    if (bundle_chkpt > get_free_checkpoint_count()){
+        return true;
+    }
+
+    return false;
+}
 
 uint64_t renamer::rename_rsrc(uint64_t log_reg){
     return this->rmt[log_reg]; 
@@ -229,6 +282,30 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
 
 void renamer::checkpoint(){
     //TODO: reimplement for CPR
+    //checkpoint the current RMT 
+    //find the insertion point of the checkpoint buffer
+    uint64_t x = chkpt_buffer_tail;
+    uint64_t i;
+    for(i = 0; i < map_table_size; i++){
+        checkpoint_buffer[x].rmt[i] = rmt[i];
+        prf_usage_counter[rmt[i]] += 1;
+    }
+
+    checkpoint_buffer[x].load_counter = 0;
+    checkpoint_buffer[x].store_counter = 0;
+    checkpoint_buffer[x].branch_counter = 0;
+
+    uint64_t j;
+    for (j=0; j < num_phys_reg; j++){
+        checkpoint_buffer[x].unmapped_bits[j] = prf_unmapped[j];
+    }
+
+    //advancing the tail 
+    chkpt_buffer_tail++;
+    if (chkpt_buffer_tail == num_checkpoints){
+        chkpt_buffer_tail = 0;
+        chkpt_buffer_tail_phase = !chkpt_buffer_tail_phase;
+    }
 }
 
 
