@@ -104,9 +104,13 @@ private:
 
     typedef struct chkpt_t{
         uint64_t *rmt;
+        bool     amo;
+        bool     csr;
+        bool     exception;
         uint64_t load_counter;
         uint64_t store_counter;
         uint64_t branch_counter;
+        uint64_t uncompleted_instruction_counter;
         uint64_t *unmapped_bits;
     }chkpt;
 
@@ -254,6 +258,10 @@ public:
 
     //whether or not to stall rename due to insufficent checkpoints
     bool stall_checkpoint(uint64_t bundle_chkpt);
+
+    //get checkpoint ID that's each instruction is associated with
+    //it is the nearest prior checkpoint
+    uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr);
 
     //////////////////////////////////////////
     // Functions related to Dispatch Stage. //

@@ -60,6 +60,10 @@ renamer::renamer(uint64_t n_log_regs,
         checkpoint_buffer[i].load_counter = 0;
         checkpoint_buffer[i].store_counter = 0;
         checkpoint_buffer[i].branch_counter = 0;
+        checkpoint_buffer[i].load_counter = 0;
+        checkpoint_buffer[i].amo = false;
+        checkpoint_buffer[i].csr = false;
+        checkpoint_buffer[i].exception = false;
     }
 
     //populating the first checkpoint
@@ -161,6 +165,29 @@ bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
     return false;
 }
 
+uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr){
+    //return the nearest prior checkpoint
+    uint64_t checkpoint_ID;
+    if (chkpt_buffer_tail == 0){
+        checkpoint_ID = num_checkpoints - 1;
+    } else {
+        checkpoint_ID = chkpt_buffer_tail - 1;
+    }
+
+    //increament other counters, set the flags etc
+    if (load){checkpoint_buffer[checkpoint_ID].load_counter++;}
+    if (store){checkpoint_buffer[checkpoint_ID].store_counter++;}
+    if (branch){checkpoint_buffer[checkpoint_ID].branch_counter++;}
+
+    
+    checkpoint_buffer[checkpoint_ID].amo = amo;
+    checkpoint_buffer[checkpoint_ID].csr = csr;
+
+    //unconditionally increamenting
+    checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter++;
+
+    return checkpoint_ID;
+}
 uint64_t renamer::rename_rsrc(uint64_t log_reg){
     return this->rmt[log_reg]; 
 }
