@@ -241,7 +241,7 @@ void pipeline_t::dispatch() {
 
             // *** FIX_ME #10b (part 1): Set completed bit in Active List.
             // FIX_ME #10b1 BEGIN
-            REN->set_complete(PAY.buf[index].AL_index);
+            REN->set_complete(PAY.buf[index].checkpoint_ID);
             // FIX_ME #10b1 END
 
             // Check if any previous pipeline stage posted an exception.

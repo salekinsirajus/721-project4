@@ -167,7 +167,7 @@ bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
 
 void renamer::set_exception(uint64_t checkpoint_ID){
     //WHAT??
-    checkpoint_buffer[checkpoint_buffer].exception = true;
+    checkpoint_buffer[checkpoint_ID].exception = true;
 }
 
 uint64_t renamer::get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr){
@@ -362,8 +362,13 @@ void renamer::write(uint64_t phys_reg, uint64_t value){
     this->prf[phys_reg] = value; 
 }
 
-void renamer::set_complete(uint64_t AL_index){
+void renamer::set_complete(uint64_t checkpoint_ID){
     //TODO: reimplement for CPR
+    checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter--;
+    if (checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter < 0){
+        printf("uncompleted IC went below 0. Should not happen\n");
+        exit(EXIT_FAILURE);
+    }
 }
 
 

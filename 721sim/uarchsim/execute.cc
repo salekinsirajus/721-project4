@@ -272,7 +272,7 @@ void pipeline_t::load_replay() {
       // 2. Set the completed bit for this instruction in the Active List.
 
       // FIX_ME #18b BEGIN
-      REN->set_complete(PAY.buf[index].AL_index);
+      REN->set_complete(PAY.buf[index].checkpoint_ID);
       // FIX_ME #18b END
    }
 }
