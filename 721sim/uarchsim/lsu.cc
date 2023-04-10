@@ -326,9 +326,9 @@ void lsu::store_addr(cycle_t cycle,
       }
    } 
    catch (mem_trap_t& t) {
-      unsigned int al_index = proc->PAY.buf[SQ[sq_index].pay_index].AL_index;
+      unsigned int checkpoint_ID = proc->PAY.buf[SQ[sq_index].pay_index].checkpoint_ID;
       assert((t.cause() == CAUSE_FAULT_STORE) || (t.cause() == CAUSE_MISALIGNED_STORE));
-      proc->set_exception(al_index);
+      proc->set_exception(checkpoint_ID);
       proc->PAY.buf[SQ[sq_index].pay_index].trap.post(t);
 
       return;

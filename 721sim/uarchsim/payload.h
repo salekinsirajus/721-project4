@@ -189,7 +189,8 @@ typedef struct {
    // Set by Dispatch Stage.
    ////////////////////////
 
-   unsigned int AL_index;       // Index into Active List.
+   //unsigned int AL_index;       // Index into Active List.
+   unsigned int checkpoint_ID;  //Checkpoint this instruction associated with; for CPR.
    unsigned int LQ_index;       // Indices into LSU. Only used by loads, stores, and branches.
    bool LQ_phase;
    unsigned int SQ_index;

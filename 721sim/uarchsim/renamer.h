@@ -263,6 +263,9 @@ public:
     //it is the nearest prior checkpoint
     uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr);
 
+    //set exception
+    void set_exception(uint64_t checkpoint_ID);
+
     //////////////////////////////////////////
     // Functions related to Dispatch Stage. //
     //////////////////////////////////////////

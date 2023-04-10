@@ -248,7 +248,7 @@ void pipeline_t::dispatch() {
             if (PAY.buf[index].trap.valid()) {
                // *** FIX_ME #10b (part 2): Set exception bit in Active List.
                // FIX_ME #10b2 BEGIN
-                REN->set_exception(PAY.buf[index].AL_index);
+                REN->set_exception(PAY.buf[index].checkpoint_ID);
                // FIX_ME #10b2 END
             }
             break;
@@ -262,13 +262,13 @@ void pipeline_t::dispatch() {
       if (IS_FP_OP(PAY.buf[index].flags)) {
 #ifndef RISCV_ENABLE_FPU
          // Floating-point ISA extension is disabled: illegal instruction exception.
-         REN->set_exception(PAY.buf[index].AL_index);
+         REN->set_exception(PAY.buf[index].checkpoint_ID);
          PAY.buf[index].trap.post(trap_illegal_instruction());
 #else
          if (unlikely(!(get_state()->sr & SR_EF))) {
             // Floating-point ISA extension is enabled.
             // The pipeline cannot natively execute FP instructions, however: trap to software FP library.
-            REN->set_exception(PAY.buf[index].AL_index);
+            REN->set_exception(PAY.buf[index].checkpoint_ID);
             PAY.buf[index].trap.post(trap_fp_disabled());
         }
 #endif

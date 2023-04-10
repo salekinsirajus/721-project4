@@ -70,7 +70,7 @@ void pipeline_t::retire(size_t& instret) {
          }
 
          if (exception)
-	    REN->set_exception(PAY.buf[PAY.head].AL_index);
+	    REN->set_exception(PAY.buf[PAY.head].checkpoint_ID);
       }
 
       if (!exception && !load_viol) {

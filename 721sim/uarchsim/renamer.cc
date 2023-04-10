@@ -165,7 +165,12 @@ bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
     return false;
 }
 
-uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr){
+void renamer::set_exception(uint64_t checkpoint_ID){
+    //WHAT??
+    checkpoint_buffer[checkpoint_buffer].exception = true;
+}
+
+uint64_t renamer::get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr){
     //return the nearest prior checkpoint
     uint64_t checkpoint_ID;
     if (chkpt_buffer_tail == 0){
@@ -188,6 +193,7 @@ uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool cs
 
     return checkpoint_ID;
 }
+
 uint64_t renamer::rename_rsrc(uint64_t log_reg){
     return this->rmt[log_reg]; 
 }

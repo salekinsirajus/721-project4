@@ -244,6 +244,9 @@ void pipeline_t::rename2() {
       }
 
       // FIX_ME #3 END
+      
+      //Saving the checkpoint ID in the payload buffer
+      PAY.buf[index].checkpoint_ID = chkpt_ID;
 
       // FIX_ME #4
       // Get the instruction's branch mask.

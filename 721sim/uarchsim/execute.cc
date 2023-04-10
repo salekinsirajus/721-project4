@@ -118,7 +118,7 @@ void pipeline_t::execute(unsigned int lane_number) {
             // Below is the only three traps the ALU could throw
             assert(t.cause() == CAUSE_FP_DISABLED || t.cause() == CAUSE_ILLEGAL_INSTRUCTION || t.cause() == CAUSE_PRIVILEGED_INSTRUCTION);
             PAY.buf[index].trap.post(t);
-            REN->set_exception(al_index);
+            REN->set_exception(PAY.buf[index].checkpoint_ID);
          }
 
          // FIX_ME #14
