@@ -3,7 +3,7 @@
 #include "mmu.h"
 
 
-void pipeline_t::retire(size_t& instret) {
+void pipeline_t::retire(size_t& instret, size_t instret_limit) {
    bool head_valid;
    bool completed, exception, load_viol, br_misp, val_misp, load, store, branch, amo, csr;
    reg_t offending_PC;
