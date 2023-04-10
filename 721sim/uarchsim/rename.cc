@@ -48,9 +48,15 @@ void pipeline_t::rename1() {
 }
 
 void pipeline_t::rename2() {
-   unsigned int i;
+   unsigned int i, j;
    unsigned int index;
    unsigned int bundle_dst, bundle_branch;
+   unsigned int bundle_chkpt; 
+
+   unsigned int chkpt_insertion_points[dispatch_width+1];
+   for (int k=0; k < dispatch_width+1; k++){
+      chkpt_insertion_points[k] = 0;
+   }
 
    // Stall the rename2 sub-stage if either:
    // (1) There isn't a current rename bundle.
@@ -65,6 +71,14 @@ void pipeline_t::rename2() {
    // Third stall condition: There aren't enough rename resources for the current rename bundle.
    bundle_dst = 0;
    bundle_branch = 0;
+   bundle_chkpt = 0;
+   bool last_was_amo_csr = false;
+   bool is_branch_mispr = false;
+
+   uint64_t instr_renamed_temp = instr_renamed_since_last_checkpoint;
+
+   db_t *actual;		// Pointer to corresponding instruction in the functional simulator.
+   j = 1;
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
@@ -87,7 +101,38 @@ void pipeline_t::rename2() {
 
       // FIX_ME #1 BEGIN
       //Not all but most branches would need checkpoints
-      if (PAY.buf[index].checkpoint == true) bundle_branch++;
+      instr_renamed_temp++;
+
+	  actual = get_pipe()->peek(PAY.buf[index].db_index);
+      is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
+
+      if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
+        if (last_was_amo_csr){
+            bundle_chkpt++;
+        }
+        else {
+            bundle_chkpt += 2;
+        }
+
+        last_was_amo_csr = true;
+      }
+
+      else if (actual->a_exception){
+        if (last_was_amo_csr == false){
+            bundle_chkpt++;
+        }
+        last_was_amo_csr = false;
+      }
+      else if ((is_branch_mispr) || (instr_renamed_temp == max_instr_bw_checkpoints)){
+        bundle_chkpt++;
+        last_was_amo_csr = false;
+      }
+
+      else {
+        last_was_amo_csr = false;
+      }
+      j++;
+
       if (PAY.buf[index].C_valid == true) bundle_dst++;
       // FIX_ME #1 END
    }
@@ -103,18 +148,58 @@ void pipeline_t::rename2() {
    // This is achieved by doing nothing and proceeding to the next statements.
 
    // FIX_ME #2 BEGIN
-   if (REN->stall_branch(bundle_branch) == true) return; //Condition 1: not enough free checkpoints
+   if (REN->stall_checkpoint(bundle_chkpt) == true) return; //Condition 1: not enough free checkpoints
    if (REN->stall_reg(bundle_dst) == true) return; //condition 2: not enough free physical registers
    // FIX_ME #2 END
 
    //
    // Sufficient resources are available to rename the rename bundle.
    //
+   last_was_amo_csr = false;
+   bool place_checkpoint_after = false;
+   bool load, store, branch, amo, csr;
+   uint64_t chkpt_ID;
+   j = 1;
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
       index = RENAME2[i].index;
+
+      amo = IS_AMO(PAY.buf[index].flags);
+      csr = IS_CSR(PAY.buf[index].flags);
+      load = IS_LOAD(PAY.buf[index].flags);
+      store = IS_STORE(PAY.buf[index].flags);
+      branch = IS_BRANCH(PAY.buf[index].flags);
+
+      if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
+            if (!last_was_amo_csr){
+                REN->checkpoint();
+                instr_renamed_since_last_checkpoint = 0;
+            }
+
+            chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
+            last_was_amo_csr = true;
+            place_checkpoint_after = true;
+      }
+
+      else if (actual->a_exception){
+        if (!last_was_amo_csr){
+            REN->checkpoint();
+            instr_renamed_since_last_checkpoint = 0;
+        }
+
+        chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
+        place_checkpoint_after = false;
+        last_was_amo_csr = false;
+      }
+
+      else if ((is_branch_mispr) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints)){
+        last_was_amo_csr = false; 
+        place_checkpoint_after = true;
+        chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
+      } 
+      
 
       // FIX_ME #3
       // Rename source registers (first) and destination register (second).
@@ -149,6 +234,15 @@ void pipeline_t::rename2() {
         //rename D by calling the respective renamer function
         PAY.buf[index].C_phys_reg = REN->rename_rdst(PAY.buf[index].C_log_reg);
       }
+
+      instr_renamed_since_last_checkpoint++;
+
+      if (place_checkpoint_after == true){
+        REN->checkpoint();
+        instr_renamed_since_last_checkpoint = 0;
+        place_checkpoint_after = false;
+      }
+
       // FIX_ME #3 END
 
       // FIX_ME #4
@@ -175,9 +269,8 @@ void pipeline_t::rename2() {
       //    so that the branch ID can be used in subsequent pipeline stages.
 
       // FIX_ME #5 BEGIN
-      if (PAY.buf[index].checkpoint == true){
-        PAY.buf[index].branch_ID = REN->checkpoint();
-      }
+
+
       // FIX_ME #5 END
    }
 
