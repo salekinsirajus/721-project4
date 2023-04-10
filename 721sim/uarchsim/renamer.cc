@@ -372,14 +372,25 @@ void renamer::set_complete(uint64_t checkpoint_ID){
 }
 
 
-bool renamer::precommit(bool &completed,
-                        bool &exception, bool &load_viol, bool &br_misp,
-                        bool &val_misp, bool &load, bool &store,
-                        bool &branch, bool &amo, bool &csr,
-                        uint64_t &PC){
+bool renamer::precommit(uint64_t &chkpt_id,
+                        uint64_t &num_loads,
+                        uint64_t &num_stores,
+                        uint64_t &num_branches,
+                        bool &amo, bool &csr, bool &exception
+                        ){
 
-    //TODO: reimplement for CPR
-    return true;
+    //check if there is at least one more checkpoint after the oldest one
+    if (!checkpoint_buffer_is_empty() && 
+        //see if the number of used checkpoint is at least 2
+        ((num_checkpoints - get_free_checkpoint_count()) > 1)){
+        
+        if (checkpoint_buffer[chkpt_buffer_head].uncompleted_instruction_counter == 0){
+            return true;
+        }
+
+    }
+
+    return false;
 }
 
 void renamer::commit(){

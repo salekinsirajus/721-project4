@@ -398,11 +398,12 @@ public:
     // * csr flag (whether or not instr. is a system instruction)
     // * program counter of the instruction
     /////////////////////////////////////////////////////////////////////
-    bool precommit(bool &completed,
-                       bool &exception, bool &load_viol, bool &br_misp, bool &val_misp,
-                   bool &load, bool &store, bool &branch, bool &amo, bool &csr,
-               uint64_t &PC);
 
+    bool precommit(uint64_t &chkpt_id,
+                        uint64_t &num_loads,
+                        uint64_t &num_stores,
+                        uint64_t &num_branches,
+                        bool &amo, bool &csr, bool &exception);
     /////////////////////////////////////////////////////////////////////
     // This function commits the instruction at the head of the Active List.
     //
