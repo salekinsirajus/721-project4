@@ -422,7 +422,7 @@ public:
 	void set_load_violation(unsigned int al_index);
 	void set_branch_misprediction(unsigned int al_index);
 	void set_value_misprediction(unsigned int al_index);
-
+    void dec_for_pipeline_registers(uint64_t index);
   //TODO: Implement these functions
 	// Miscellaneous other functions.
 	//void next_cycle();

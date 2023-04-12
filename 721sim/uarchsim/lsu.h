@@ -195,7 +195,7 @@ public:
   void train(bool load);
   bool commit(bool load, bool atomic_op);
 
-  void flush();
+  void flush(renamer *REN_PTR, payload_t *PAY_PTR);
 
   void copy_mem(char** master_mem_table);
 

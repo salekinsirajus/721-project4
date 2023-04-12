@@ -1,5 +1,20 @@
 #include "pipeline.h"
 
+void pipeline_t::dec_for_pipeline_registers(uint64_t index){
+    if (PAY.buf[index].A_valid){
+        REN->dec_usage_counter(PAY.buf[index].A_phys_reg);
+    }
+    if (PAY.buf[index].B_valid){
+        REN->dec_usage_counter(PAY.buf[index].B_phys_reg);
+    }
+    if (PAY.buf[index].D_valid){
+        REN->dec_usage_counter(PAY.buf[index].D_phys_reg);
+    }
+    if (PAY.buf[index].C_valid){
+        REN->dec_usage_counter(PAY.buf[index].C_phys_reg);
+    }
+
+}
 
 void pipeline_t::squash_complete(reg_t jump_PC) {
 	unsigned int i, j;
@@ -47,6 +62,9 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	//////////////////////////
 
 	for (i = 0; i < dispatch_width; i++) {
+		if (DISPATCH[i].valid){
+            dec_for_pipeline_registers(DISPATCH[i].index);
+        }
 		DISPATCH[i].valid = false;
 	}
 
@@ -54,7 +72,7 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	// Schedule Stage
 	//////////////////////////
 
-	IQ.flush();
+	IQ.flush(REN, PAY.buf);
 
 	//////////////////////////
 	// Register Read Stage
@@ -62,14 +80,25 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	// Writeback Stage
 	//////////////////////////
 
+    uint64_t idx;
 	for (i = 0; i < issue_width; i++) {
+		if (Execution_Lanes[i].rr.valid){
+            dec_for_pipeline_registers(Execution_Lanes[i].rr.index);
+        }
 		Execution_Lanes[i].rr.valid = false;
-		for (j = 0; j < Execution_Lanes[i].ex_depth; j++)
+		for (j = 0; j < Execution_Lanes[i].ex_depth; j++){
+           if(Execution_Lanes[i].ex[j].valid){
+                dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
+            }
 		   Execution_Lanes[i].ex[j].valid = false;
+        }
+		if (Execution_Lanes[i].wb.valid){
+            dec_for_pipeline_registers(Execution_Lanes[i].wb.index);
+        }
 		Execution_Lanes[i].wb.valid = false;
 	}
 
-	LSU.flush();
+	LSU.flush(REN, PAY.buf);
 }
 
 

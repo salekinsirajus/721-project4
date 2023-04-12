@@ -77,7 +77,7 @@ public:
 	              bool D_valid, bool D_ready, unsigned int D_tag);
 	void wakeup(unsigned int tag);
 	void select_and_issue(unsigned int num_lanes, lane* Execution_Lanes);
-	void flush();
+	void flush(renamer *REN_PTR, payload_t *PAY_PTR);
 	void clear_branch_bit(unsigned int branch_ID);
 	void squash(unsigned int branch_ID);
   void dump_iq(pipeline_t* proc, unsigned int index,FILE* file=stderr);

@@ -265,9 +265,27 @@ void issue_queue::remove(unsigned int i) {
 	}
 }
 
-void issue_queue::flush() {
+void issue_queue::flush(renamer *REN_PTR, payload_t *PAY_PTR) {
 	length = 0;
 	for (unsigned int i = 0; i < size; i++) {
+        if (q[i].valid){
+            //get the physical registers for both src and dest
+            if (q[i].A_valid){
+                REN_PTR->dec_usage_counter(q[i].A_tag);
+            }
+            if (q[i].B_valid){
+                REN_PTR->dec_usage_counter(q[i].B_tag);
+            }
+            if (q[i].D_valid){
+                REN_PTR->dec_usage_counter(q[i].D_tag);
+            }
+            
+            if (PAY_PTR[q[i].index].C_valid){
+                //FIXME: is this the right way to access the Payload buffer entry
+                REN_PTR->dec_usage_counter(PAY_PTR[q[i].index].C_phys_reg);
+            }
+        }
+
 		q[i].valid = false;
 	}
 
