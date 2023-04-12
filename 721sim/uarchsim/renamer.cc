@@ -195,6 +195,7 @@ uint64_t renamer::get_checkpoint_ID(bool load, bool store, bool branch, bool amo
 }
 
 uint64_t renamer::rename_rsrc(uint64_t log_reg){
+    inc_usage_counter(rmt[log_reg]);
     return this->rmt[log_reg]; 
 }
 
@@ -309,6 +310,7 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
    
     assert(old != this->rmt[log_reg]);
 
+    inc_usage_counter(result);
     return result;
 }
 
@@ -321,7 +323,7 @@ void renamer::checkpoint(){
     uint64_t i;
     for(i = 0; i < map_table_size; i++){
         checkpoint_buffer[x].rmt[i] = rmt[i];
-        prf_usage_counter[rmt[i]] += 1;
+        inc_usage_counter(rmt[i]);
     }
 
     checkpoint_buffer[x].load_counter = 0;
@@ -341,6 +343,18 @@ void renamer::checkpoint(){
     }
 }
 
+void renamer::inc_usage_counter(uint64_t phys_reg){
+    this->prf_usage_counter[phys_reg] += 1;
+}
+
+void renamer::dec_usage_counter(uint64_t phys_reg){
+    this->prf_usage_counter[phys_reg] -= 1;
+
+    if (this->prf_usage_counter[phys_reg] < 0) {
+        printf("PRF usage counter went below 0\n. ERRORRRRR!!!!");
+        exit(EXIT_FAILURE);
+    }
+}
 
 bool renamer::is_ready(uint64_t phys_reg){
     return this->prf_ready[phys_reg];
@@ -355,10 +369,12 @@ void renamer::set_ready(uint64_t phys_reg){
 }
 
 uint64_t renamer::read(uint64_t phys_reg){
+    this->dec_usage_counter(phys_reg);
     return this->prf[phys_reg];
 }
 
 void renamer::write(uint64_t phys_reg, uint64_t value){
+    this->dec_usage_counter(phys_reg);
     this->prf[phys_reg] = value; 
 }
 
@@ -396,13 +412,13 @@ bool renamer::precommit(uint64_t &chkpt_id,
 void renamer::commit(uint64_t log_reg){
     //NOTE: double-check which RMT to use, might be a source of error
     uint64_t phys_reg = checkpoint_buffer[chkpt_buffer_head].rmt[log_reg];
+    this->dec_usage_counter(phys_reg);
 
     prf_usage_counter[phys_reg] -= 1;
     if (prf_usage_counter[phys_reg] < 0) {
         printf("Usage counter for %d went negative. Should not happen\n", phys_reg);
         exit(EXIT_FAILURE);
     }
-
 }
 
 
@@ -413,14 +429,64 @@ void renamer::resolve(uint64_t AL_index, uint64_t branch_ID, bool correct){
 
 void renamer::squash(){
     //the renamer should be rolled back to the committed state of the machine
-    //TODO: reimplement for CPR
+
+    //restore the RMT
     uint64_t i;
-    
-    this->restore_free_list();
+    for (i = 0; i < map_table_size; i++){
+        rmt[i] = checkpoint_buffer[chkpt_buffer_head].rmt[i];
+    }
+    //restore unmapped bit from the oldest checkpoint
+    for (i = 0; i < num_phys_reg; i++){
+        prf_unmapped[i] = checkpoint_buffer[chkpt_buffer_head].unmapped_bits[i];
+    }
+
+    //reinitialize free list    
+    this->restore_free_list();  //FIXME: might need to revisit
+
+    //keep the head, remove everything before tail?
+    uint64_t to_squash[num_checkpoints];
+    for (int j=0; j < num_checkpoints; j++){
+        to_squash[j] = 0;
+        if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
+            assert(chkpt_buffer_tail > chkpt_buffer_head);
+            if ((j > chkpt_buffer_head) && (chkpt_buffer_tail > j)){
+                to_squash[j] = 1;
+            }
+        }
+        else {
+            assert(chkpt_buffer_tail < chkpt_buffer_head);
+            if ((j >= chkpt_buffer_head) || (chkpt_buffer_tail <= j)){
+            to_squash[j] = 1;
+        }
+    }
+
+    for (int j=0 < j < num_checkpoints; j++){
+        if (to_squash[j] == 1) {//squash
+           for (int k=0; k < map_table_size; k++){
+                dec_usage_counter(checkpoint_buffer[j].rmt[k]); 
+            } 
+        }
+    }
+
+    /* Logic for the reinitializing the PRF usage counters:
+        - we blow away all the later checkpoints after the head
+        - since the physical register are only used the the oldest
+          checkpoints' RMT, we increament those registers usage counter
+        - There is no inflight instruction, so no consumer
+    */
+
+    //reinitialize prf usage counter
+    //for (i = 0; i < num_phys_reg; i++){
+    //    prf_usage_counter[i] = 0; 
+    //}
+
+    //only the physical registers in RMT counts as a use
+    //for (i = 0; i < map_table_size; i++){
+    //    prf_usage_counter[rmt[i]]= 1;
+    //}
 
     return;
 }
-
 
 
 //Debugging helper functions

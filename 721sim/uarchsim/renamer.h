@@ -218,6 +218,8 @@ public:
     // Return value: physical register name
     /////////////////////////////////////////////////////////////////////
     uint64_t rename_rsrc(uint64_t log_reg);
+    void inc_usage_counter(uint64_t phys_reg);
+    void dec_usage_counter(uint64_t phys_reg);
 
     /////////////////////////////////////////////////////////////////////
     // This function is used to rename a single destination register.
