@@ -421,7 +421,7 @@ public:
     // This is why you should assert() that it is valid to commit the
     // head instruction and otherwise cause the simulator to exit.
     /////////////////////////////////////////////////////////////////////
-    void commit();
+    void commit(uint64_t log_reg);
 
     //////////////////////////////////////////////////////////////////////
     // Squash the renamer class.

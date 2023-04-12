@@ -393,9 +393,16 @@ bool renamer::precommit(uint64_t &chkpt_id,
     return false;
 }
 
-void renamer::commit(){
-    //TODO: reimplement for CPR
-    return;
+void renamer::commit(uint64_t log_reg){
+    //NOTE: double-check which RMT to use, might be a source of error
+    uint64_t phys_reg = checkpoint_buffer[chkpt_buffer_head].rmt[log_reg];
+
+    prf_usage_counter[phys_reg] -= 1;
+    if (prf_usage_counter[phys_reg] < 0) {
+        printf("Usage counter for %d went negative. Should not happen\n", phys_reg);
+        exit(EXIT_FAILURE);
+    }
+
 }
 
 
