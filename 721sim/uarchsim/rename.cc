@@ -101,7 +101,7 @@ void pipeline_t::rename2() {
 
       // FIX_ME #1 BEGIN
       //Not all but most branches would need checkpoints
-      instr_renamed_temp++;
+      instr_renamed_temp++;  //NOTE: potential for edge case errors
 
 	  actual = get_pipe()->peek(PAY.buf[index].db_index);
       is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
@@ -114,6 +114,7 @@ void pipeline_t::rename2() {
             bundle_chkpt += 2;
         }
 
+        instr_renamed_temp  = 0;
         last_was_amo_csr = true;
       }
 
@@ -121,11 +122,13 @@ void pipeline_t::rename2() {
         if (last_was_amo_csr == false){
             bundle_chkpt++;
         }
+        instr_renamed_temp  = 0;
         last_was_amo_csr = false;
       }
       else if ((is_branch_mispr) || (instr_renamed_temp == max_instr_bw_checkpoints)){
         bundle_chkpt++;
         last_was_amo_csr = false;
+        instr_renamed_temp  = 0;
       }
 
       else {
