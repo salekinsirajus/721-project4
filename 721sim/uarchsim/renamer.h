@@ -365,9 +365,9 @@ public:
     //   reaches the head of the Active List. We don’t want or need
     //   that because we immediately recover within this function.)
     /////////////////////////////////////////////////////////////////////
-    void resolve(uint64_t AL_index,
-             uint64_t branch_ID,
-             bool correct);
+    uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
+                           uint64_t &total_loads, uint64_t &total_stores, 
+                           uint64_t &total_branches){
 
     //////////////////////////////////////////
     // Functions related to Retire Stage.   //

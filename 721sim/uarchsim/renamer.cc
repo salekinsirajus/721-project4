@@ -156,14 +156,35 @@ uint64_t renamer::get_free_checkpoint_count(){
     return -1; 
 }
 
+void renamer::reset_checkpoint(uint64_t i){
+    for (uint64_t k=0; k < map_table_size; k++){
+        checkpoint_buffer[i].rmt[k] = 0;
+    }
+    for (uint64_t k=0; k < num_phys_reg; k++){
+        checkpoint_buffer[i].unmapped_bits[k] = 1;
+    }
+
+    checkpoint_buffer[i].load_counter = 0;
+    checkpoint_buffer[i].store_counter = 0;
+    checkpoint_buffer[i].branch_counter = 0;
+    checkpoint_buffer[i].load_counter = 0;
+    checkpoint_buffer[i].amo = false;
+    checkpoint_buffer[i].csr = false;
+    checkpoint_buffer[i].exception = false;
+
+}
+
 void renamer::free_checkpoint(){
-    //what does it mean?
+    //clean out all the counters and flags
+    reset_checkpoint(chkpt_buffer_head);
+    //now move the head ahead
     chkpt_buffer_head++;
 
     if (chkpt_buffer_head == num_checkpoints){
         chkpt_buffer_head = 0;
         chkpt_buffer_head_phase = !chkpt_buffer_head_phase;
     }
+
 }
 
 bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
@@ -436,10 +457,140 @@ void renamer::commit(uint64_t log_reg){
 }
 
 
-void renamer::resolve(uint64_t AL_index, uint64_t branch_ID, bool correct){
-    //TODO: reimplement for CPR
+void renamer::generate_squash_mask_array(uint64_t &array, uint64_t rc){
+    /*
+    only set 1 for checkpoints that will be squashed based on the following
+    criteria:
+        1. it's younger than the rc(rollback checkpoint)
+        2. do not include the rollback checkpoint
+        3. the youngest checkpoint is 1 behind tail
+    */
+    for (uint64_t i = 0; i < num_checkpoints; i++){
+        if (chkpt_buffer_head_phase == chkpt_buffer_tail_phase){
+            if ((i > rc) && (i < chkpt_buffer_tail)){
+                //set to 1
+                array[i] = 1; 
+            }
+        }
+        else {
+            if ((i < chkpt_buffer_tail) || (i > rc)){
+                //set to 1
+                array[i] = 1; 
+            }
+
+        }
+    }
+
 }
 
+uint64_t renamer::generate_squash_mask(uint64_t rc){
+    /*
+    only set 1 for checkpoints that will be squashed based on the following
+    criteria:
+        1. it's younger than the rc(rollback checkpoint)
+        2. do not include the rollback checkpoint
+        3. the youngest checkpoint is 1 behind tail
+    */
+    uint64_t mask = 0;
+    for (uint64_t i = 0; i < num_checkpoints; i++){
+        if (chkpt_buffer_head_phase == chkpt_buffer_tail_phase){
+            if ((i > rc) && (i < chkpt_buffer_tail)){
+                //set to 1
+                mask += pow(2, i);
+            }
+        }
+        else {
+            if ((i < chkpt_buffer_tail) || (i > rc)){
+                //set to 1
+                mask += pow(2, i);
+            }
+
+        }
+    }
+
+    return mask;
+}
+
+uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
+                           uint64_t &total_loads, uint64_t &total_stores, 
+                           uint64_t &total_branches){
+    uint64_t squash_mask;
+    uint64_t rollback_chkpt;
+
+    if (!next){
+        rollback_chkpt = chkpt_id;
+    }
+    else {
+        rollback_chkpt = (chkpt_id + 1) % num_checkpoints; 
+    }
+
+    //assert the rollback_chkpt is valid
+    assert(is_chkpt_valid(rollback_chkpt));
+
+    //restore the RMT from the rollback checkpoint
+    for (uint64_t i=0; i < map_table_size; i++){
+        rmt[i] = checkpoint_buffer[rollback_chkpt].rmt[i];
+    }
+
+    //restore the unmapped bits from the rollback checkpoint
+    for (uint64_t j=0; j < num_phys_reg; j++){
+        prf_unmapped[i] = checkpoint_buffer[rollback_chkpt].unmapped_bits[i];
+    }
+
+    //generate squash mask
+    squash_mask = generate_squash_mask(rollback_chkpt);
+
+    //update the prf_usage_counter for phys reg. that are checkpointed in the
+    //to-be-squashed checkpointed
+    uint64_t squash_mask_array[] = new uint64_t[num_checkpoints];
+    for (uint64_t j=0; j < num_checkpoints; j++)squash_mask_array[j] = 0;
+    generate_squash_mask_array(squash_mask_array, rollback_chkpt);
+
+    for (uint64_t j=0; j < num_checkpoints; j++){
+        if (squash_mask_array[j] == 1){
+            for (uint64_t k=0; k < map_table_size; k++){
+                dec_usage_counter(checkpoint_buffer[j].rmt[k]);
+            }
+        } else{
+            if (j != rollback_chkpt){
+                total_loads += checkpoint_buffer[j].load_counter;
+                total_stores += checkpoint_buffer[j].store_counter;
+                total_branches += checkpoint_buffer[j].branch_counter;
+            }
+        }
+    }
+
+    //start executing from this point
+    checkpoint_buffer[rollback_chkpt].load_counter = 0; 
+    checkpoint_buffer[rollback_chkpt].store_counter = 0; 
+    checkpoint_buffer[rollback_chkpt].branch_counter = 0; 
+    checkpoint_buffer[rollback_chkpt].uncompleted_instruction_counter = 0; 
+    checkpoint_buffer[rollback_chkpt].amo = false; 
+    checkpoint_buffer[rollback_chkpt].csr = false; 
+    checkpoint_buffer[rollback_chkpt].exception = false; 
+
+    return squash_mask;
+}
+
+bool is_chkpt_valid(uint64_t chkpt_id){
+    /* return true for all the valid checkpoints, INCLUDING the head*/
+    if (checkpoint_buffer_is_full()) return true;
+    if (checkpoint_buffer_is_empty()) return false;
+
+    if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
+        assert(chkpt_buffer_tail > chkpt_buffer_head);
+        if ((chkpt_id >= chkpt_buffer_head) && (chkpt_buffer_tail > chkpt_id)){
+            return true;
+        }
+    }
+    else {
+        assert(chkpt_buffer_tail < chkpt_buffer_head);
+        if ((chkpt_id >= chkpt_buffer_head) || (chkpt_buffer_tail < chkpt_id)){
+            return true; 
+        }
+    }
+
+}
 
 void renamer::squash(){
     //the renamer should be rolled back to the committed state of the machine
@@ -461,17 +612,12 @@ void renamer::squash(){
     uint64_t to_squash[num_checkpoints];
     for (int j=0; j < num_checkpoints; j++){
         to_squash[j] = 0;
-        if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
-            assert(chkpt_buffer_tail > chkpt_buffer_head);
-            if ((j > chkpt_buffer_head) && (chkpt_buffer_tail > j)){
-                to_squash[j] = 1;
-            }
+        if (is_chkpt_valid(j)){
+            to_squash[j] = 1;
         }
-        else {
-            assert(chkpt_buffer_tail < chkpt_buffer_head);
-            if ((j >= chkpt_buffer_head) || (chkpt_buffer_tail <= j)){
-                to_squash[j] = 1;
-            }
+        //excluding head bc it is the oldest checkpoint
+        if (j == chkpt_buffer_head){
+            to_squash[j] = 0;
         }
     }
 
