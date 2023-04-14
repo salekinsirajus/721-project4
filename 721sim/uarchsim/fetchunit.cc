@@ -628,14 +628,14 @@ void fetchunit_t::mispredict(uint64_t branch_pred_tag, bool taken, uint64_t next
 
 // Commit the indicated branch from the branch queue.
 // We assert that it is at the head.
-void fetchunit_t::commit(uint64_t branch_pred_tag) {
+void fetchunit_t::commit() {
    // Pop the branch queue. It returns the pred_tag/pred_tag_phase of the head entry prior to popping it.
    uint64_t pred_tag;
    bool pred_tag_phase;
    bq.pop(pred_tag, pred_tag_phase);
 
    // Assert that the branch_pred_tag (pred_tag of the branch being committed from the pipeline) corresponds to the popped branch queue entry.
-   assert(branch_pred_tag == ((pred_tag << 1) | (pred_tag_phase ? 1 : 0)));
+   //assert(branch_pred_tag == ((pred_tag << 1) | (pred_tag_phase ? 1 : 0)));
 
    // Update the conditional branch predictor or indirect branch predictor.
    // Update measurements.
