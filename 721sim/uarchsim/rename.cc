@@ -201,6 +201,11 @@ void pipeline_t::rename2() {
         last_was_amo_csr = false; 
         place_checkpoint_after = true;
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
+      }
+      else { //for every regular Joe instruciontion
+        last_was_amo_csr = false; 
+        place_checkpoint_after = false;
+        chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
       } 
       
 
