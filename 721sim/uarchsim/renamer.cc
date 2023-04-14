@@ -2,6 +2,7 @@
 
 #include "renamer.h"
 #include <cassert>
+#include <cmath>
 
 renamer::renamer(uint64_t n_log_regs,
         uint64_t n_phys_regs,
@@ -340,6 +341,8 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
     }
    
     assert(old != this->rmt[log_reg]);
+    this->map(result);
+    this->unmap(old);
 
     inc_usage_counter(result);
     return result;
@@ -378,15 +381,38 @@ void renamer::checkpoint(){
     }
 }
 
+void renamer::map(uint64_t phys_reg){
+// Clear the unmapped bit of physical register
+    prf_unmapped[phys_reg] = 0;
+}
+
+void renamer::unmap(uint64_t phys_reg){
+// Set the unmapped bit of physical register
+// Check if phys_reg’s usage counter is 0; if so,
+// push phys_reg onto the Free List.
+    prf_unmapped[phys_reg] = 1;
+    if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
+        //push it onto the free list:
+        push_free_list(phys_reg);
+    }
+    
+}
+
 void renamer::inc_usage_counter(uint64_t phys_reg){
     this->prf_usage_counter[phys_reg] += 1;
 }
 
 void renamer::dec_usage_counter(uint64_t phys_reg){
+    bool __success = false;
+    assert(this->prf_usage_counter[phys_reg] > 0);
     this->prf_usage_counter[phys_reg] -= 1;
+    if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
+        //push it onto the free list:
+        __success = push_free_list(phys_reg);
+    }
 
-    if (this->prf_usage_counter[phys_reg] < 0) {
-        printf("PRF usage counter went below 0\n. ERRORRRRR!!!!");
+    if (!__success){
+        printf("Free list is full; failed to push reclaimed register onto the free list\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -457,7 +483,7 @@ void renamer::commit(uint64_t log_reg){
 }
 
 
-void renamer::generate_squash_mask_array(uint64_t &array, uint64_t rc){
+void renamer::generate_squash_mask_array(uint64_t *array, uint64_t rc){
     /*
     only set 1 for checkpoints that will be squashed based on the following
     criteria:
@@ -465,7 +491,7 @@ void renamer::generate_squash_mask_array(uint64_t &array, uint64_t rc){
         2. do not include the rollback checkpoint
         3. the youngest checkpoint is 1 behind tail
     */
-    for (uint64_t i = 0; i < num_checkpoints; i++){
+    for (unsigned long i = 0; i < num_checkpoints; i++){
         if (chkpt_buffer_head_phase == chkpt_buffer_tail_phase){
             if ((i > rc) && (i < chkpt_buffer_tail)){
                 //set to 1
@@ -533,8 +559,11 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
 
     //restore the unmapped bits from the rollback checkpoint
+    uint64_t unmapped_bit;
     for (uint64_t j=0; j < num_phys_reg; j++){
-        prf_unmapped[i] = checkpoint_buffer[rollback_chkpt].unmapped_bits[i];
+        unmapped_bit = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
+        if (unmapped_bit == 1) this->unmap(j);
+        else this->map(j);
     }
 
     //generate squash mask
@@ -542,14 +571,19 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     //update the prf_usage_counter for phys reg. that are checkpointed in the
     //to-be-squashed checkpointed
-    uint64_t squash_mask_array[] = new uint64_t[num_checkpoints];
+    uint64_t *squash_mask_array;
+    squash_mask_array = new uint64_t[num_checkpoints];
+
+
     for (uint64_t j=0; j < num_checkpoints; j++)squash_mask_array[j] = 0;
     generate_squash_mask_array(squash_mask_array, rollback_chkpt);
 
     for (uint64_t j=0; j < num_checkpoints; j++){
         if (squash_mask_array[j] == 1){
             for (uint64_t k=0; k < map_table_size; k++){
+                //TODO: verify we need to decreament
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]);
+                //FIXME: do we need to unmap these physical registers?
             }
         } else{
             if (j != rollback_chkpt){
@@ -572,7 +606,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     return squash_mask;
 }
 
-bool is_chkpt_valid(uint64_t chkpt_id){
+bool renamer::is_chkpt_valid(uint64_t chkpt_id){
     /* return true for all the valid checkpoints, INCLUDING the head*/
     if (checkpoint_buffer_is_full()) return true;
     if (checkpoint_buffer_is_empty()) return false;
@@ -600,13 +634,18 @@ void renamer::squash(){
     for (i = 0; i < map_table_size; i++){
         rmt[i] = checkpoint_buffer[chkpt_buffer_head].rmt[i];
     }
+
     //restore unmapped bit from the oldest checkpoint
+    uint64_t unmapped_bit;
     for (i = 0; i < num_phys_reg; i++){
-        prf_unmapped[i] = checkpoint_buffer[chkpt_buffer_head].unmapped_bits[i];
+        unmapped_bit = checkpoint_buffer[chkpt_buffer_head].unmapped_bits[i];
+        //free list restoring via aggressive register reclamation
+        if (unmapped_bit == 1) this->unmap(i);
+        else this->map(i);
+        prf_unmapped[i] = unmapped_bit;
     }
 
     //reinitialize free list    
-    this->restore_free_list();  //FIXME: might need to revisit
 
     //keep the head, remove everything before tail?
     uint64_t to_squash[num_checkpoints];
@@ -628,23 +667,6 @@ void renamer::squash(){
             } 
         }
     }
-
-    /* Logic for the reinitializing the PRF usage counters:
-        - we blow away all the later checkpoints after the head
-        - since the physical register are only used the the oldest
-          checkpoints' RMT, we increament those registers usage counter
-        - There is no inflight instruction, so no consumer
-    */
-
-    //reinitialize prf usage counter
-    //for (i = 0; i < num_phys_reg; i++){
-    //    prf_usage_counter[i] = 0; 
-    //}
-
-    //only the physical registers in RMT counts as a use
-    //for (i = 0; i < map_table_size; i++){
-    //    prf_usage_counter[rmt[i]]= 1;
-    //}
 
     return;
 }

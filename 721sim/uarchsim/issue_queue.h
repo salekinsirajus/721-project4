@@ -10,8 +10,8 @@ typedef struct {
 	// Index into the instruction payload buffer.
 	unsigned int index;
 
-	// Branches that this instruction depends on.
-	uint64_t branch_mask;
+	// checkpoint ID for CPR 
+	uint64_t checkpoint_ID;
 
 	// Execution lane that this instruction wants.
 	unsigned int lane_id;
@@ -77,10 +77,10 @@ public:
 	              bool D_valid, bool D_ready, unsigned int D_tag);
 	void wakeup(unsigned int tag);
 	void select_and_issue(unsigned int num_lanes, lane* Execution_Lanes);
-	void flush(renamer *REN_PTR, payload_t *PAY_PTR);
+	void flush();
 	void clear_branch_bit(unsigned int branch_ID);
-	void squash(unsigned int branch_ID);
-  void dump_iq(pipeline_t* proc, unsigned int index,FILE* file=stderr);
+	void squash(uint64_t squash_mask);
+    void dump_iq(pipeline_t* proc, unsigned int index,FILE* file=stderr);
 };
 
 #endif //ISSUE_QUEUE_H

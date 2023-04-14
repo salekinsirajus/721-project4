@@ -2,6 +2,16 @@
 #include "trap.h"
 #include "mmu.h"
 
+//copied over from pipeline.cc since its scope was limited to that file only
+static void update_timer(state_t* state, size_t instret)
+{
+  uint64_t count0 = (uint64_t)(uint32_t)state->count;
+  state->count += instret;
+  uint64_t before = count0 - state->compare;
+  if (int64_t(before ^ (before + instret)) < 0)
+    state->sr |= (1 << (IRQ_TIMER + SR_IP_SHIFT));
+}
+
 
 void pipeline_t::retire(size_t& instret, size_t instret_limit) {
   bool proceed;

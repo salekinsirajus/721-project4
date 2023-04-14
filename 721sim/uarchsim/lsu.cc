@@ -626,6 +626,16 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 		LQ[j].valid = true;
 	}
 
+    for(unsigned int i = 0; i < lq_size; i++){
+        if (LQ[i].valid){
+            if ((LQ[i].addr_avail) && (!LQ[i].value_avail)){
+                if (proc->PAY.buf[LQ[i].pay_index].C_valid){
+                    proc->REN->dec_usage_counter(proc->PAY.buf[LQ[i].pay_index].C_phys_reg);
+                }
+            }
+        }
+    }
+
 	/////////////////////////////
 	// Restore SQ.
 	/////////////////////////////
@@ -778,7 +788,7 @@ bool lsu::commit(bool load, bool atomic_op) {
 }
 
 
-void lsu::flush(renamer *REN_PTR, payload_t *PAY_PTR) {
+void lsu::flush() {
 	// Flush LQ.
 	lq_head = 0;
 	lq_head_phase = false;
@@ -789,9 +799,9 @@ void lsu::flush(renamer *REN_PTR, payload_t *PAY_PTR) {
 	for (unsigned int i = 0; i < lq_size; i++) {
         if (LQ[i].valid && LQ[i].addr_avail && !LQ[i].value_avail){
             //dec prf usage_counter
-            if (PAY_PTR[LQ[i].pay_index].C_valid){
+            if (proc->PAY.buf[LQ[i].pay_index].C_valid){
                 //FIXME: is this the right way to access the Payload buffer entry
-                REN_PTR->dec_usage_counter(PAY_PTR[LQ[i].pay_index].C_phys_reg);
+                proc->REN->dec_usage_counter(proc->PAY.buf[LQ[i].pay_index].C_phys_reg);
             }
         }
 		LQ[i].valid = false;

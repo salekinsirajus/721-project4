@@ -221,7 +221,7 @@ void pipeline_t::dispatch() {
             // 3. As you can see in file pipeline.h, the IQ variable is the Issue Queue itself, NOT a pointer to it.
 
             // FIX_ME #10a BEGIN
-	        IQ.dispatch(index, DISPATCH[i].branch_mask, PAY.buf[index].lane_id,
+	        IQ.dispatch(index, DISPATCH[i].checkpoint_ID, PAY.buf[index].lane_id,
 	              PAY.buf[index].A_valid, A_ready, PAY.buf[index].A_phys_reg,
 	              PAY.buf[index].B_valid, B_ready, PAY.buf[index].B_phys_reg,
 	              PAY.buf[index].D_valid, D_ready, PAY.buf[index].D_phys_reg

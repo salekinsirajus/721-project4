@@ -255,6 +255,7 @@ void pipeline_t::rename2() {
       
       //Saving the checkpoint ID in the payload buffer
       PAY.buf[index].checkpoint_ID = chkpt_ID;
+      RENAME2[i].checkpoint_ID = chkpt_ID;
 
       // FIX_ME #4
       // Get the instruction's branch mask.
@@ -267,7 +268,7 @@ void pipeline_t::rename2() {
       //    to the DISPATCH[] pipeline register. The required left-hand side of the assignment statement is already provided for you below:
       //    RENAME2[i].branch_mask = ??;
       // FIX_ME #4 BEGIN
-      RENAME2[i].branch_mask = REN->get_branch_mask();
+      //RENAME2[i].branch_mask = REN->get_branch_mask();
       // FIX_ME #4 END
 
       // FIX_ME #5
@@ -296,6 +297,6 @@ void pipeline_t::rename2() {
       RENAME2[i].valid = false;
       DISPATCH[i].valid = true;
       DISPATCH[i].index = RENAME2[i].index;
-      DISPATCH[i].branch_mask = RENAME2[i].branch_mask;
+      DISPATCH[i].checkpoint_ID = RENAME2[i].checkpoint_ID;
    }
 }

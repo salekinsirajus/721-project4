@@ -366,7 +366,7 @@ private:
 	void agen(unsigned int index);
 	void alu(unsigned int index);
 	void squash_complete(reg_t jump_PC);
-	void resolve(unsigned int branch_ID, bool correct);
+    void selective_squash(uint64_t squash_mask);
 	void checker();
 	void check_single(reg_t micro, reg_t isa, db_t* actual, const char *desc);
 	void check_double(reg_t micro0, reg_t micro1, reg_t isa0, reg_t isa1, const char *desc);

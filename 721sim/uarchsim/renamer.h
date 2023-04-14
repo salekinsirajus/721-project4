@@ -139,6 +139,12 @@ private:
     uint64_t get_free_checkpoint_count();
     bool checkpoint_buffer_is_empty();
     bool checkpoint_buffer_is_full();
+    void reset_checkpoint(uint64_t);
+    void map(uint64_t);
+    void unmap(uint64_t);
+    void generate_squash_mask_array(uint64_t *array, uint64_t rc);
+    uint64_t generate_squash_mask(uint64_t rc);
+    bool is_chkpt_valid(uint64_t chkpt_id);
 
     /*
     void print_free_list();
@@ -365,9 +371,9 @@ public:
     //   reaches the head of the Active List. We don’t want or need
     //   that because we immediately recover within this function.)
     /////////////////////////////////////////////////////////////////////
-    uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
+    uint64_t rollback(uint64_t chkpt_id, bool next,
                            uint64_t &total_loads, uint64_t &total_stores, 
-                           uint64_t &total_branches){
+                           uint64_t &total_branches);
 
     //////////////////////////////////////////
     // Functions related to Retire Stage.   //
