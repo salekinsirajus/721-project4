@@ -156,6 +156,16 @@ uint64_t renamer::get_free_checkpoint_count(){
     return -1; 
 }
 
+void renamer::free_checkpoint(){
+    //what does it mean?
+    chkpt_buffer_head++;
+
+    if (chkpt_buffer_head == num_checkpoints){
+        chkpt_buffer_head = 0;
+        chkpt_buffer_head_phase = !chkpt_buffer_head_phase;
+    }
+}
+
 bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
     //Get the number of available checkpoints
     if (bundle_chkpt > get_free_checkpoint_count()){
@@ -326,9 +336,13 @@ void renamer::checkpoint(){
         inc_usage_counter(rmt[i]);
     }
 
+    checkpoint_buffer[x].uncompleted_instruction_counter = 0;
     checkpoint_buffer[x].load_counter = 0;
     checkpoint_buffer[x].store_counter = 0;
     checkpoint_buffer[x].branch_counter = 0;
+    checkpoint_buffer[x].amo = false;
+    checkpoint_buffer[x].csr = false;
+    checkpoint_buffer[x].exception = false;
 
     uint64_t j;
     for (j=0; j < num_phys_reg; j++){
@@ -456,11 +470,12 @@ void renamer::squash(){
         else {
             assert(chkpt_buffer_tail < chkpt_buffer_head);
             if ((j >= chkpt_buffer_head) || (chkpt_buffer_tail <= j)){
-            to_squash[j] = 1;
+                to_squash[j] = 1;
+            }
         }
     }
 
-    for (int j=0 < j < num_checkpoints; j++){
+    for (int j=0 ; j < num_checkpoints; j++){
         if (to_squash[j] == 1) {//squash
            for (int k=0; k < map_table_size; k++){
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]); 

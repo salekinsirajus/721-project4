@@ -257,6 +257,8 @@ public:
     /////////////////////////////////////////////////////////////////////
     void checkpoint();
 
+    //free the oldest checkpoint
+    void free_checkpoint();
 
     //whether or not to stall rename due to insufficent checkpoints
     bool stall_checkpoint(uint64_t bundle_chkpt);
