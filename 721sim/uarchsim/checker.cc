@@ -85,12 +85,12 @@ void pipeline_t::checker() {
    // If an architectural exception
    // Make sure that MICRO_SIM also excepts but
    // don't check anything else
-   if(actual->a_exception){
+   //if(actual->a_exception){
      // TODO: Add this check
-     assert(REN->get_exception(PAY.buf[head].AL_index) == true);
-   }
+     //assert(REN->get_exception(PAY.buf[head].AL_index) == true);
+   //}
    // If not an architectural exception
-   else{
+   if(!actual->a_exception){
 	   if (PAY.buf[head].split) {
 	      switch (PAY.buf[head].inst.opcode()) {
 

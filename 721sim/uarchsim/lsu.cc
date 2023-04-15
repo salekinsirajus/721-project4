@@ -335,6 +335,8 @@ void lsu::store_addr(cycle_t cycle,
    }
 
    // Detect and mark load violations.
+   //TODO/FIXME: Probably will need for CPR phase 2
+/*
    if (SPEC_DISAMBIG) {
       unsigned int load_entry;
       unsigned int al_index;
@@ -343,6 +345,7 @@ void lsu::store_addr(cycle_t cycle,
          proc->set_load_violation(al_index);
       }
    }
+*/
 
    if (!PERFECT_DCACHE) {
       bool hit;
@@ -568,13 +571,13 @@ void lsu::execute_load(cycle_t cycle,
     } 
     catch (mem_trap_t& t)
 	  {
-      unsigned int al_index = proc->PAY.buf[LQ[lq_index].pay_index].AL_index;
+      unsigned int chkpt_id = proc->PAY.buf[LQ[lq_index].pay_index].checkpoint_ID;
       reg_t epc = proc->PAY.buf[LQ[lq_index].pay_index].pc;
 		  ifprintf(logging_on,proc->lsu_log, "Cycle %" PRIcycle ": core %3d: load exception %s, epc 0x%016" PRIx64 " badvaddr 0x%16" PRIx64 "\n",
 		          proc->cycle, proc->id, t.name(), epc, t.get_badvaddr());
 
       assert(t.cause() == CAUSE_FAULT_LOAD || t.cause() == CAUSE_MISALIGNED_LOAD);
-      proc->set_exception(al_index);
+      proc->set_exception(chkpt_id);
       proc->PAY.buf[LQ[lq_index].pay_index].trap.post(t);
 	  }
 

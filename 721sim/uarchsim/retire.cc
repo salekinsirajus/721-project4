@@ -14,6 +14,7 @@ static void update_timer(state_t* state, size_t instret)
 
 
 void pipeline_t::retire(size_t& instret, size_t instret_limit) {
+  printf("Number of instruction completed: %d\n", num_insn);
   bool proceed;
   bool completed, exception, load_viol, br_misp, val_misp, branch, amo, csr;
   reg_t offending_PC;

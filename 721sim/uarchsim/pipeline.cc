@@ -551,16 +551,8 @@ bool pipeline_t::step_micro(size_t instret_limit, size_t& instret)
 
 //WIP: retirement code chang for CPR START
       retire(instret, instret_limit);            // Retire Stage
-      update_timer(&state, instret-prev_instret);
-      prev_instret = instret;
-      // Halt retirement if its time for an HTIF tick as this will change state
-      if(instret == instret_limit)
-        break;
       // Stop simulation if limit reached
       if((counter(commit_count) >= stop_amt) && use_stop_amt){
-        //stats->dump_knobs();
-        //stats->dump_counters();
-        //stats->dump_rates();
         return true;
       }
 //WIP: retirement code chang for CPR FINISH
@@ -748,16 +740,4 @@ uint32_t pipeline_t::get_instruction(uint64_t inst_pc){
 
 void pipeline_t::set_exception(unsigned int checkpoint_ID) {
    REN->set_exception(checkpoint_ID);
-}
-
-void pipeline_t::set_load_violation(unsigned int al_index) {
-   REN->set_load_violation(al_index);
-}
-
-void pipeline_t::set_branch_misprediction(unsigned int al_index) {
-   REN->set_branch_misprediction(al_index);
-}
-
-void pipeline_t::set_value_misprediction(unsigned int al_index) {
-   REN->set_value_misprediction(al_index);
 }

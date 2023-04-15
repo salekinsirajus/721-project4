@@ -146,8 +146,8 @@ private:
     uint64_t generate_squash_mask(uint64_t rc);
     bool is_chkpt_valid(uint64_t chkpt_id);
 
-    /*
     void print_free_list();
+    /*
     void print_amt();
     void print_rmt();
     void print_prf();

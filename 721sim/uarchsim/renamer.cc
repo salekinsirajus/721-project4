@@ -30,19 +30,15 @@ renamer::renamer(uint64_t n_log_regs,
     //amt[1] = 1,..., amt[n] = n indicate r0->p0, r1->p1,..
     //the contents of the prf does not matter I suppose.
     for (j=0; j < n_log_regs; j++){
-        rmt[n_log_regs - 1 - j] = j;
+        rmt[j] = j;
     }
 
     //initializing the physical register files to be consistent with
     //an empty pipeline state
     for (j=0; j < n_phys_regs; j++){
         prf_ready[j] = 1;
-        if (reg_in_rmt(j)){
-            prf_unmapped[j] = 0;
-        } else {
-            prf_unmapped[j] = 1;
-        }
         prf_usage_counter[j] = 0;
+        prf_unmapped[j] = 1;
     }
 
 
@@ -61,7 +57,7 @@ renamer::renamer(uint64_t n_log_regs,
         checkpoint_buffer[i].load_counter = 0;
         checkpoint_buffer[i].store_counter = 0;
         checkpoint_buffer[i].branch_counter = 0;
-        checkpoint_buffer[i].load_counter = 0;
+        checkpoint_buffer[i].uncompleted_instruction_counter = 0;
         checkpoint_buffer[i].amo = false;
         checkpoint_buffer[i].csr = false;
         checkpoint_buffer[i].exception = false;
@@ -74,6 +70,7 @@ renamer::renamer(uint64_t n_log_regs,
         //increameting the usage counter of the prf since we're checkpointing
         //the RMT at this location
         prf_usage_counter[rmt[k]] += 1;
+        prf_unmapped[rmt[k]] = 0;
     }
 
     for (j=0; j < n_phys_regs; j++){
@@ -263,6 +260,9 @@ bool renamer::push_free_list(uint64_t phys_reg){
         this->fl.tail_phase = !this->fl.tail_phase;
     }
 
+    printf("pushing %d to the free list\n", phys_reg);
+    //print_free_list();
+
     assert_free_list_invariance();
     return true; 
 }
@@ -271,7 +271,6 @@ uint64_t renamer::pop_free_list(){
     if (this->free_list_is_empty()){
         return UINT64_MAX;
     }
-
     uint64_t result;
     result = this->fl.list[this->fl.head];
 
@@ -283,6 +282,8 @@ uint64_t renamer::pop_free_list(){
         this->fl.head_phase = !this->fl.head_phase;
     }
 
+    printf("popping %d from the free list\n", result);
+    //print_free_list();
     assert_free_list_invariance();
     return result;
 }
@@ -403,18 +404,18 @@ void renamer::inc_usage_counter(uint64_t phys_reg){
 }
 
 void renamer::dec_usage_counter(uint64_t phys_reg){
-    bool __success = false;
     assert(this->prf_usage_counter[phys_reg] > 0);
     this->prf_usage_counter[phys_reg] -= 1;
+
     if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
         //push it onto the free list:
-        __success = push_free_list(phys_reg);
+        bool __success = push_free_list(phys_reg);
+        if (!__success){
+            printf("Free list is full; failed to push reclaimed register onto the free list\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
-    if (!__success){
-        printf("Free list is full; failed to push reclaimed register onto the free list\n");
-        exit(EXIT_FAILURE);
-    }
 }
 
 bool renamer::is_ready(uint64_t phys_reg){
@@ -455,6 +456,14 @@ bool renamer::precommit(uint64_t &chkpt_id,
                         uint64_t &num_branches,
                         bool &amo, bool &csr, bool &exception
                         ){
+
+    chkpt_id = chkpt_buffer_head;
+    num_loads = checkpoint_buffer[chkpt_buffer_head].load_counter;
+    num_stores = checkpoint_buffer[chkpt_buffer_head].store_counter;
+    num_branches = checkpoint_buffer[chkpt_buffer_head].branch_counter;
+    amo = checkpoint_buffer[chkpt_buffer_head].amo;
+    csr = checkpoint_buffer[chkpt_buffer_head].csr;
+    exception = checkpoint_buffer[chkpt_buffer_head].exception;
 
     //check if there is at least one more checkpoint after the oldest one
     if (!checkpoint_buffer_is_empty() && 
@@ -673,7 +682,6 @@ void renamer::squash(){
 
 
 //Debugging helper functions
-/*
 void renamer::print_free_list(){
     uint64_t i=0;
     printf("--------------FREE LIST-------------------\n");
@@ -686,6 +694,8 @@ void renamer::print_free_list(){
     printf("FL: tail: %d, tail_phase:%d, head: %d, head_phase: %d\n", 
             fl.tail, fl.tail_phase, fl.head, fl.head_phase);
 }
+
+/*
 void renamer::print_amt(){
     printf("---------------------AMT-----------------\n");
     for (int i=0; i < this->map_table_size; i++){

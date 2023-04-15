@@ -91,8 +91,9 @@ void pipeline_t::dispatch() {
    assert(i > 0);			// If we reached this point, there should be at least one instruction in the dispatch bundle.
    assert(i <= dispatch_width);		// There cannot be more than "dispatch_width" instructions in the dispatch bundle.
 
+   //CPR: getting rid of this call because of CPR does not have an Active List
    // FIX_ME #6 BEGIN
-   if (REN->stall_dispatch(i) == true) return;
+   //if (REN->stall_dispatch(i) == true) return;
    // FIX_ME #6 END
 
    //
@@ -283,7 +284,7 @@ void pipeline_t::dispatch() {
                          PAY.buf[index].left,
                          PAY.buf[index].right,
                          PAY.buf[index].is_signed,
-			 IS_AMO(PAY.buf[index].flags),
+			             IS_AMO(PAY.buf[index].flags),
                          index,
                          PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase,
                          PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
@@ -310,7 +311,10 @@ void pipeline_t::dispatch() {
       }
 
       // Checkpointed branches must record information for restoring the LQ/SQ when a branch misprediction resolves.
-      if (PAY.buf[index].checkpoint) {
+       
+	insn_t inst;
+    inst = PAY.buf[index].inst;
+    if ((inst.opcode() == OP_JAL) || (inst.opcode() == OP_JALR) || (IS_BRANCH(PAY.buf[index].flags))){
          LSU.checkpoint(PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase, PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
       }
    }
