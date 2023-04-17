@@ -15,10 +15,9 @@ static void update_timer(state_t* state, size_t instret)
 
 void pipeline_t::retire(size_t& instret, size_t instret_limit) {
   bool proceed;
-  bool completed, exception, load_viol, br_misp, val_misp, branch, amo, csr;
-  reg_t offending_PC;
 
   bool amo_success;
+  reg_t offending_PC;
   trap_t *trap = NULL; // Supress uninitialized warning.
 
   bool load, store;  //FIXME: where to declare it?????
@@ -49,24 +48,25 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                 load = (RETSTATE.num_loads_left > 0); 
                 store = (RETSTATE.num_stores_left > 0);
 
-                if (!RETSTATE.exception){
-                    if (RETSTATE.amo && !(load || store)){ 
-                        // amo, excluding load-with-reservation (LR) and store-conditional (SC)
-                        RETSTATE.exception = execute_amo(); 
-                    } 
-                    else if (csr) { 
-                        RETSTATE.exception = execute_csr(); 
-                    } // This is probably optional. // Just doing it out of completeness and adapting existing code. 
+            }
+            
+            if (!RETSTATE.exception){
+                if (RETSTATE.amo && !(load || store)){ 
+                    // amo, excluding load-with-reservation (LR) and store-conditional (SC)
+                    RETSTATE.exception = execute_amo(); 
+                } 
+                //FIXME: do we need to check for !(load || store)????????
+                else if (RETSTATE.csr) { 
+                    RETSTATE.exception = execute_csr(); 
+                } // This is probably optional. // Just doing it out of completeness and adapting existing code. 
                     
                     // setting the exception flag from executing the amo/csr above
-                    if (RETSTATE.exception){
-                        REN->set_exception(RETSTATE.chkpt_id); 
-                    }
-
-                    RETSTATE.state = RETIRE_BULK_COMMIT;
-                    RETSTATE.log_reg = 0;
+                if (RETSTATE.exception){
+                    REN->set_exception(RETSTATE.chkpt_id); 
                 }
-                else { //if IT IS an exception (RETSTATE.exception)
+            } //(!RETSTATE.exception) end
+
+            if (RETSTATE.exception){
                   trap = PAY.buf[PAY.head].trap.get();
 
                   // CSR exceptions are micro-architectural exceptions and are
@@ -99,6 +99,9 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                     
                   return;
                 }
+            else { //RETSTATE.exception == false (no exception found)
+                RETSTATE.state = RETIRE_BULK_COMMIT;
+                RETSTATE.log_reg = 0;
             }
          }
       }
