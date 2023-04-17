@@ -53,11 +53,6 @@ void pipeline_t::rename2() {
    unsigned int bundle_dst, bundle_branch;
    unsigned int bundle_chkpt; 
 
-   unsigned int chkpt_insertion_points[dispatch_width+1];
-   for (int k=0; k < dispatch_width+1; k++){
-      chkpt_insertion_points[k] = 0;
-   }
-
    // Stall the rename2 sub-stage if either:
    // (1) There isn't a current rename bundle.
    // (2) The Dispatch Stage is stalled.
@@ -70,10 +65,9 @@ void pipeline_t::rename2() {
 
    // Third stall condition: There aren't enough rename resources for the current rename bundle.
    bundle_dst = 0;
-   bundle_branch = 0;
    bundle_chkpt = 0;
-   bool last_was_amo_csr = false;
    bool is_branch_mispr = false;
+   bool simulate_place_checkpoint_after = false;
 
    uint64_t instr_renamed_temp = instr_renamed_since_last_checkpoint;
 
@@ -101,43 +95,53 @@ void pipeline_t::rename2() {
 
       // FIX_ME #1 BEGIN
       //Not all but most branches would need checkpoints
-      instr_renamed_temp++;  //NOTE: potential for edge case errors
 
 	  actual = get_pipe()->peek(PAY.buf[index].db_index);
       is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
 
-      if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
-        if (last_was_amo_csr){
-            bundle_chkpt++;
-        }
-        else {
-            bundle_chkpt += 2;
-        }
 
-        instr_renamed_temp  = 0;
-        last_was_amo_csr = true;
+      if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
+            if (instr_renamed_temp != 0){
+                bundle_chkpt++;
+                instr_renamed_temp = 0;
+            }
+
+            simulate_place_checkpoint_after = true;
       }
 
       else if (actual->a_exception){
-        if (last_was_amo_csr == false){
+        if (instr_renamed_temp != 0){
             bundle_chkpt++;
+            instr_renamed_temp = 0;
         }
-        instr_renamed_temp  = 0;
-        last_was_amo_csr = false;
-      }
-      else if ((is_branch_mispr) || (instr_renamed_temp == max_instr_bw_checkpoints)){
-        bundle_chkpt++;
-        last_was_amo_csr = false;
-        instr_renamed_temp  = 0;
+
+        simulate_place_checkpoint_after = false;
       }
 
-      else {
-        last_was_amo_csr = false;
+      else if ((is_branch_mispr == true) || (instr_renamed_temp == max_instr_bw_checkpoints)){
+        printf("simulate placing checkpoint: is_branch_mispredict: %d, instr_ren == max: %d\n",
+            is_branch_mispr, instr_renamed_temp == max_instr_bw_checkpoints
+        );
+        simulate_place_checkpoint_after = true;
       }
-      j++;
+      else { //for every regular Joe instruciontion
+        simulate_place_checkpoint_after = false;
+      } 
+
+      //simulate the renaming logic as below
+      instr_renamed_temp++;
+
+      if (simulate_place_checkpoint_after == true){
+        if (is_branch_mispr == true) {printf("SIMULATE: placing checkpoint after a branch misprediction\n");}
+        bundle_chkpt++;
+        instr_renamed_temp = 0;
+        simulate_place_checkpoint_after = false;
+      }
+
 
       if (PAY.buf[index].C_valid == true) bundle_dst++;
       // FIX_ME #1 END
+
    }
 
    // FIX_ME #2
@@ -158,16 +162,19 @@ void pipeline_t::rename2() {
    //
    // Sufficient resources are available to rename the rename bundle.
    //
-   last_was_amo_csr = false;
    bool place_checkpoint_after = false;
    bool load, store, branch, amo, csr;
    uint64_t chkpt_ID;
-   j = 1;
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
       index = RENAME2[i].index;
+      if (PAY.buf[index].good_instruction){
+	    actual = get_pipe()->peek(PAY.buf[index].db_index);
+      } else {
+        printf("actual is populated by a bad instruction in rename2.\n");
+        }
 
       amo = IS_AMO(PAY.buf[index].flags);
       csr = IS_CSR(PAY.buf[index].flags);
@@ -175,35 +182,32 @@ void pipeline_t::rename2() {
       store = IS_STORE(PAY.buf[index].flags);
       branch = IS_BRANCH(PAY.buf[index].flags);
 
+
       if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
-            if (!last_was_amo_csr){
+            if (instr_renamed_since_last_checkpoint != 0){
                 REN->checkpoint();
                 instr_renamed_since_last_checkpoint = 0;
             }
 
             chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
-            last_was_amo_csr = true;
             place_checkpoint_after = true;
       }
 
       else if (actual->a_exception){
-        if (!last_was_amo_csr){
+        if (instr_renamed_since_last_checkpoint != 0){
             REN->checkpoint();
             instr_renamed_since_last_checkpoint = 0;
         }
 
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
         place_checkpoint_after = false;
-        last_was_amo_csr = false;
       }
 
-      else if ((is_branch_mispr) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints)){
-        last_was_amo_csr = false; 
+      else if ((is_branch_mispr == true) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints)){
         place_checkpoint_after = true;
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
       }
       else { //for every regular Joe instruciontion
-        last_was_amo_csr = false; 
         place_checkpoint_after = false;
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
       } 
@@ -246,6 +250,7 @@ void pipeline_t::rename2() {
       instr_renamed_since_last_checkpoint++;
 
       if (place_checkpoint_after == true){
+        if (is_branch_mispr == true) {printf("placing checkpoint after a branch misprediction\n");}
         REN->checkpoint();
         instr_renamed_since_last_checkpoint = 0;
         place_checkpoint_after = false;

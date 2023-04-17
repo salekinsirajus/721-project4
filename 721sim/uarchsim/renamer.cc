@@ -47,7 +47,7 @@ renamer::renamer(uint64_t n_log_regs,
     chkpt_buffer_tail = 0;
     chkpt_buffer_head_phase = 0;
     chkpt_buffer_tail_phase = 0;
-    num_checkpoints = n_chkpts;  //CHANGE THIS TO COMMAND LINE ARG LATER
+    num_checkpoints = n_chkpts;
 
     checkpoint_buffer = new chkpt[num_checkpoints];
     uint64_t i;
@@ -260,7 +260,7 @@ bool renamer::push_free_list(uint64_t phys_reg){
         this->fl.tail_phase = !this->fl.tail_phase;
     }
 
-    printf("pushing %d to the free list\n", phys_reg);
+    //printf("pushing %d to the free list\n", phys_reg);
     //print_free_list();
 
     assert_free_list_invariance();
@@ -282,7 +282,7 @@ uint64_t renamer::pop_free_list(){
         this->fl.head_phase = !this->fl.head_phase;
     }
 
-    printf("popping %d from the free list\n", result);
+    //printf("popping %d from the free list\n", result);
     //print_free_list();
     assert_free_list_invariance();
     return result;
@@ -373,6 +373,8 @@ void renamer::checkpoint(){
     for (j=0; j < num_phys_reg; j++){
         checkpoint_buffer[x].unmapped_bits[j] = prf_unmapped[j];
     }
+
+    //setting the instruction renamed since last chkpt variable to zero
 
     //advancing the tail 
     chkpt_buffer_tail++;
@@ -559,6 +561,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
         rollback_chkpt = (chkpt_id + 1) % num_checkpoints; 
     }
 
+    printf("rollback_checkpoint %d in rollback\n", rollback_chkpt);
     //assert the rollback_chkpt is valid
     assert(is_chkpt_valid(rollback_chkpt));
 
@@ -616,23 +619,41 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 }
 
 bool renamer::is_chkpt_valid(uint64_t chkpt_id){
+    printf("is_chkpt_valid()\n");
+    printf("head: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
+        chkpt_buffer_head_phase, chkpt_buffer_tail_phase, chkpt_id);
     /* return true for all the valid checkpoints, INCLUDING the head*/
-    if (checkpoint_buffer_is_full()) return true;
-    if (checkpoint_buffer_is_empty()) return false;
+    if (checkpoint_buffer_is_full()){
+        printf("buffer full clause hit; return true\n");
+        return true;
+    }
+    if (checkpoint_buffer_is_empty()){
+        printf("buffer empty clause hit; return false\n");
+        return false;
+    }
 
     if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
         assert(chkpt_buffer_tail > chkpt_buffer_head);
         if ((chkpt_id >= chkpt_buffer_head) && (chkpt_buffer_tail > chkpt_id)){
+            printf("same phase, head >=chkpt > tail. return true\n");
             return true;
+        } else {
+            printf("same phases, return false\n");
+            return false;    
         }
     }
     else {
         assert(chkpt_buffer_tail < chkpt_buffer_head);
-        if ((chkpt_id >= chkpt_buffer_head) || (chkpt_buffer_tail < chkpt_id)){
+        if ((chkpt_id >= chkpt_buffer_head) || (chkpt_buffer_tail > chkpt_id)){
+            printf("diff phase, chkpt  >= head ||  tail > chkpt. return true\n");
             return true; 
+        } else {
+            printf("diff phases, return false\n");
+            return false;
         }
     }
 
+    printf("end of function. returns ????\n");
 }
 
 void renamer::squash(){
