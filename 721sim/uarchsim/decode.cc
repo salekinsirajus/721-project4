@@ -39,6 +39,17 @@ void pipeline_t::decode() {
     LOG(decode_log,cycle,PAY.buf[index].sequence,PAY.buf[index].pc,"Instruction: %08" PRIX32 "",(word_t)inst.bits());
 
 		// Set checkpoint flag.
+        switch (inst.opcode()) {
+            case OP_JAL:
+            case OP_JALR:
+            case OP_BRANCH:
+                PAY.buf[index].checkpoint = true;
+                break;
+
+            default:
+                PAY.buf[index].checkpoint = false;
+                break;
+        }
 
 		// Set flags  and function units
 		switch(inst.opcode()) {

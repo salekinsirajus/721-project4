@@ -32,30 +32,14 @@ void pipeline_t::writeback(unsigned int lane_number) {
       //   instructions in the frontend stages are automatically squashed since they are by definition
       //   logically after the branch.
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
-     printf("=======writeback===========\n");
-     printf("next_pc: %X\n", PAY.buf[index].next_pc);
-     printf("c_next_pc: %X\n", PAY.buf[index].c_next_pc);
-     db_t *actual;
-     actual = get_pipe()->peek(PAY.buf[index].db_index);
-     printf("actual->a_next_pc: %X\n", actual->a_next_pc);
-     printf("\nc_next_pc == a_next_pc: %d\n", PAY.buf[index].c_next_pc == actual->a_next_pc);
-     printf("===========================\n");
-
-     // Branch was mispredicted.
-     if (!PAY.buf[index].good_instruction){
-        //temporary, don't mess with any bad instruction
-        printf("not good instruction: pay buf index %d\n", index);
-        return;
-     }
-/*
-     if (PAY.buf[index].good_instruction){
-     } else {
-        printf("Writeback stage: not handling a mispredict bc bad instruction\n");
-        return;
-     }
-     if (PAY.buf[index].next_pc != actual->a_next_pc) {
-*/
-     if ((PAY.buf[index].good_instruction) && (PAY.buf[index].next_pc != PAY.buf[index].c_next_pc)){
+      if (PAY.buf[index].checkpoint){
+        if (PERFECT_BRANCH_PRED){
+            //do nothing
+        }
+        else if ((PAY.buf[index].good_instruction) && PAY.buf[index].next_pc == PAY.buf[index].c_next_pc){
+            //do nothing
+        }
+        else { //branch misprediction
 
         // Roll-back the Fetch Unit.
         FetchUnit->mispredict(PAY.buf[index].pred_tag,
@@ -110,6 +94,7 @@ void pipeline_t::writeback(unsigned int lane_number) {
         PAY.rollback(index);
 
      }
+      }
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
       // FIX_ME #16
       // Set completed bit in Active List.

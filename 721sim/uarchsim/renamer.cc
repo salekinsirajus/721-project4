@@ -165,7 +165,7 @@ void renamer::reset_checkpoint(uint64_t i){
     checkpoint_buffer[i].load_counter = 0;
     checkpoint_buffer[i].store_counter = 0;
     checkpoint_buffer[i].branch_counter = 0;
-    checkpoint_buffer[i].load_counter = 0;
+    checkpoint_buffer[i].uncompleted_instruction_counter = 0;
     checkpoint_buffer[i].amo = false;
     checkpoint_buffer[i].csr = false;
     checkpoint_buffer[i].exception = false;
@@ -343,9 +343,10 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
    
     assert(old != this->rmt[log_reg]);
     this->map(result);
+    inc_usage_counter(result);
+
     this->unmap(old);
 
-    inc_usage_counter(result);
     return result;
 }
 

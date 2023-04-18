@@ -105,7 +105,7 @@ typedef struct {
    fu_type fu;                  // Operation function unit type.
    cycle_t latency;             // Operation latency (ignore: not currently used).
 
-   //bool checkpoint;             // If 'true', this instruction is a branch
+   bool checkpoint;             // If 'true', this instruction is a branch
                                 // that needs a checkpoint.
 
    // Note: At present, the decode stage does not split RISCV instructions

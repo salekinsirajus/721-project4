@@ -119,9 +119,11 @@ void pipeline_t::rename2() {
       }
 
       else if ((is_branch_mispr == true) || (instr_renamed_temp == max_instr_bw_checkpoints)){
+        /*
         printf("simulate placing checkpoint: is_branch_mispredict: %d, instr_ren == max: %d\n",
             is_branch_mispr, instr_renamed_temp == max_instr_bw_checkpoints
         );
+        */
         simulate_place_checkpoint_after = true;
       }
       else { //for every regular Joe instruciontion

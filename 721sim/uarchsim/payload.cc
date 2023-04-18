@@ -145,6 +145,7 @@ void payload::split(unsigned int index) {
 	buf[index+1].flags            = buf[index].flags;
 	buf[index+1].fu               = buf[index].fu;
 	buf[index+1].latency          = buf[index].latency;
+    buf[index+1].checkpoint       = buf[index].checkpoint;
 	buf[index+1].checkpoint_ID    = buf[index].checkpoint_ID;
 	buf[index+1].split_store      = buf[index].split_store;
 
