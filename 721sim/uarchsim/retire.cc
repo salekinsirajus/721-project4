@@ -153,7 +153,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
    case RETIRE_FINALIZE:{
         //how do we get the indices
         index = PAY.head;
-        while((PAY.buf[index].checkpoint_ID == RETSTATE.chkpt_id) || (index != PAY.tail)){
+        while((PAY.buf[index].checkpoint_ID == RETSTATE.chkpt_id) && (index != PAY.tail)){
             if (IS_FP_OP(PAY.buf[PAY.head].flags)) {
                 // post the FP exception bit to CSR fflags (the Accrued Exception Flags)
                 get_state()->fflags |= PAY.buf[PAY.head].fflags;
@@ -193,11 +193,12 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             // Pause, but remain in the RETIRE_FINALIZE state for 
             // the next cycle, if it's time for an HTIF tick, 
             // as this will change state. 
+            index = PAY.head;
             if (instret == instret_limit) return; // Pause and remain in the state RETIRE_FINALIZE.
 
-            }
-            RETSTATE.state = RETIRE_IDLE;  //outside of the RETIRE_FINALIZE while() loop
-        }
+         }
+         RETSTATE.state = RETIRE_IDLE;  //outside of the RETIRE_FINALIZE while() loop
+      }
 
       break; 
     default:

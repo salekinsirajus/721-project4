@@ -40,7 +40,7 @@ renamer::renamer(uint64_t n_log_regs,
         prf_usage_counter[j] = 0;
         prf_unmapped[j] = 1;
     }
-
+    
 
     //checkpoint buffer
     chkpt_buffer_head = 0;
@@ -486,12 +486,6 @@ void renamer::commit(uint64_t log_reg){
     //NOTE: double-check which RMT to use, might be a source of error
     uint64_t phys_reg = checkpoint_buffer[chkpt_buffer_head].rmt[log_reg];
     this->dec_usage_counter(phys_reg);
-
-    prf_usage_counter[phys_reg] -= 1;
-    if (prf_usage_counter[phys_reg] < 0) {
-        printf("Usage counter for %d went negative. Should not happen\n", phys_reg);
-        exit(EXIT_FAILURE);
-    }
 }
 
 
@@ -717,6 +711,14 @@ void renamer::print_free_list(){
             fl.tail, fl.tail_phase, fl.head, fl.head_phase);
 }
 
+void renamer::print_prf_usage(){
+    printf("---------------------PRF-----------------\n");
+    for (int i=0; i < this->num_phys_reg; i++){
+        printf("| %8llu ", prf_usage_counter[i]);
+    }
+    printf("\n-------------------END_PRF-----------------\n");
+
+}
 /*
 void renamer::print_amt(){
     printf("---------------------AMT-----------------\n");

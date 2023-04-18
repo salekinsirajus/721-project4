@@ -147,10 +147,10 @@ private:
     bool is_chkpt_valid(uint64_t chkpt_id);
 
     void print_free_list();
+    void print_prf_usage();
     /*
     void print_amt();
     void print_rmt();
-    void print_prf();
     void print_prf_ready();
     void print_active_list(bool between_head_and_tail);
     */
