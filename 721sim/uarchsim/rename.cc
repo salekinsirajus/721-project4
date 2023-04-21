@@ -66,17 +66,20 @@ void pipeline_t::rename2() {
    // Third stall condition: There aren't enough rename resources for the current rename bundle.
    bundle_dst = 0;
    bundle_chkpt = 0;
-   bool is_branch_mispr = false;
+   bool is_branch_mispr;
+   bool is_exception;
    bool simulate_place_checkpoint_after = false;
 
    uint64_t instr_renamed_temp = instr_renamed_since_last_checkpoint;
 
    db_t *actual;		// Pointer to corresponding instruction in the functional simulator.
-   j = 1;
+   printf("====================LOOP1 BEGIN====================\n");
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
+      is_branch_mispr = false;
+      is_exception = false;
       index = RENAME2[i].index;
 
       // FIX_ME #1
@@ -96,9 +99,14 @@ void pipeline_t::rename2() {
       // FIX_ME #1 BEGIN
       //Not all but most branches would need checkpoints
 
-	  actual = get_pipe()->peek(PAY.buf[index].db_index);
-      is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
-
+      if (PAY.buf[index].good_instruction){
+	        actual = get_pipe()->peek(PAY.buf[index].db_index);
+            is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
+            is_exception = actual->a_exception;
+            printf("%X: GOOD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+      } else {
+            printf("%X:  BAD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+      }
 
       if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
             if (instr_renamed_temp != 0){
@@ -109,7 +117,7 @@ void pipeline_t::rename2() {
             simulate_place_checkpoint_after = true;
       }
 
-      else if (actual->a_exception){
+      else if (is_exception){
         if (instr_renamed_temp != 0){
             bundle_chkpt++;
             instr_renamed_temp = 0;
@@ -134,17 +142,20 @@ void pipeline_t::rename2() {
       instr_renamed_temp++;
 
       if (simulate_place_checkpoint_after == true){
-        if (is_branch_mispr == true) {printf("SIMULATE: placing checkpoint after a branch misprediction\n");}
+        //if (is_branch_mispr == true) {printf("SIMULATE: placing checkpoint after a branch misprediction\n");}
         bundle_chkpt++;
         instr_renamed_temp = 0;
-        simulate_place_checkpoint_after = false;
       }
+        
+      simulate_place_checkpoint_after = false;
 
 
       if (PAY.buf[index].C_valid == true) bundle_dst++;
       // FIX_ME #1 END
 
    }
+
+   printf("====================LOOP1   END====================\n");
 
    // FIX_ME #2
    // Check if the Rename2 Stage must stall due to any of the following conditions:
@@ -167,23 +178,28 @@ void pipeline_t::rename2() {
    bool place_checkpoint_after = false;
    bool load, store, branch, amo, csr;
    uint64_t chkpt_ID;
+   printf("====================LOOP2 BEGIN===================\n");
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
+      is_branch_mispr = false;
+      is_exception = false;
       index = RENAME2[i].index;
-      if (PAY.buf[index].good_instruction){
-	    actual = get_pipe()->peek(PAY.buf[index].db_index);
+      if(PAY.buf[index].good_instruction){
+	        actual = get_pipe()->peek(PAY.buf[index].db_index);
+            is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
+            is_exception = actual->a_exception;
+            printf("%X: GOOD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
       } else {
-        printf("actual is populated by a bad instruction in rename2.\n");
-        }
+            printf("%X:  BAD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+      }
 
       amo = IS_AMO(PAY.buf[index].flags);
       csr = IS_CSR(PAY.buf[index].flags);
       load = IS_LOAD(PAY.buf[index].flags);
       store = IS_STORE(PAY.buf[index].flags);
       branch = IS_BRANCH(PAY.buf[index].flags);
-
 
       if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
             if (instr_renamed_since_last_checkpoint != 0){
@@ -195,7 +211,7 @@ void pipeline_t::rename2() {
             place_checkpoint_after = true;
       }
 
-      else if (actual->a_exception){
+      else if (is_exception){
         if (instr_renamed_since_last_checkpoint != 0){
             REN->checkpoint();
             instr_renamed_since_last_checkpoint = 0;
@@ -252,15 +268,16 @@ void pipeline_t::rename2() {
       instr_renamed_since_last_checkpoint++;
 
       if (place_checkpoint_after == true){
-        if (is_branch_mispr == true) {printf("placing checkpoint after a branch misprediction\n");}
         REN->checkpoint();
         instr_renamed_since_last_checkpoint = 0;
-        place_checkpoint_after = false;
       }
+        
+      place_checkpoint_after = false;
 
       // FIX_ME #3 END
       
       //Saving the checkpoint ID in the payload buffer
+      printf("%X: checkpoint_id assigned to this instruction: %lu\n", PAY.buf[index].pc, chkpt_ID);
       PAY.buf[index].checkpoint_ID = chkpt_ID;
       RENAME2[i].checkpoint_ID = chkpt_ID;
 
@@ -292,6 +309,7 @@ void pipeline_t::rename2() {
 
       // FIX_ME #5 END
    }
+   printf("====================LOOP2   END===================\n");
 
    //
    // Transfer the rename bundle from the Rename Stage to the Dispatch Stage.

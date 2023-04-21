@@ -39,7 +39,7 @@ void pipeline_t::writeback(unsigned int lane_number) {
         else if ((PAY.buf[index].good_instruction) && PAY.buf[index].next_pc == PAY.buf[index].c_next_pc){
             //do nothing
         }
-        else { //branch misprediction
+        else if ((PAY.buf[index].good_instruction) && PAY.buf[index].next_pc != PAY.buf[index].c_next_pc){ //branch misprediction
 
             // Roll-back the Fetch Unit.
             FetchUnit->mispredict(PAY.buf[index].pred_tag,

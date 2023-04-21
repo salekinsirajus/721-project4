@@ -4,6 +4,7 @@
 
 class renamer {
 private:
+    uint64_t _fl_count;
     /////////////////////////////////////////////////////////////////////
     // Put private class variables here.
     /////////////////////////////////////////////////////////////////////
@@ -150,12 +151,17 @@ private:
     void print_prf_usage();
     /*
     void print_amt();
-    void print_rmt();
     void print_prf_ready();
     void print_active_list(bool between_head_and_tail);
     */
-    bool reg_in_rmt(uint64_t);
+    void print_rmt();
+    bool reg_in_rmt(uint64_t phys_reg);
+    bool in_free_list(uint64_t phys_reg);
     void assert_free_list_invariance(); 
+    void assert_register_count_cpr();
+    void assert_checkpoint_buffer_invariance();
+    uint64_t get_mapped_count();
+    uint64_t get_unmapped_count();
 
 public:
     ////////////////////////////////////////

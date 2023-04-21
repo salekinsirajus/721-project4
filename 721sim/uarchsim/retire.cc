@@ -94,6 +94,9 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                   squash_complete(jump_PC);
                   inc_counter(recovery_count);
 
+                  update_timer(&state, 1); // Update timer by 1 retired instr.
+                  assert(instret <= instret_limit);
+
                   // Flush PAY.
                   PAY.clear();
                     

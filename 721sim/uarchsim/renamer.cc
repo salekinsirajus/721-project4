@@ -69,8 +69,8 @@ renamer::renamer(uint64_t n_log_regs,
         checkpoint_buffer[chkpt_buffer_head].rmt[k] = rmt[k];
         //increameting the usage counter of the prf since we're checkpointing
         //the RMT at this location
-        prf_usage_counter[rmt[k]] += 1;
-        prf_unmapped[rmt[k]] = 0;
+        map(rmt[k]);
+        inc_usage_counter(rmt[k]);
     }
 
     for (j=0; j < n_phys_regs; j++){
@@ -82,6 +82,7 @@ renamer::renamer(uint64_t n_log_regs,
 
     //free list; free_list_size = prf - n_log_regs (721ss-prf-2 slide, p19)
     free_list_size = n_phys_regs - n_log_regs;
+    _fl_count = free_list_size;
     fl.list = new uint64_t[free_list_size];
     fl.head = 0;
     fl.tail = 0;
@@ -138,7 +139,13 @@ uint64_t renamer::get_free_checkpoint_count(){
      
     int used, free;
     if (this->chkpt_buffer_head_phase == this->chkpt_buffer_tail_phase){
-        assert(this->chkpt_buffer_tail > this->chkpt_buffer_head);
+        if (!(this->chkpt_buffer_tail > this->chkpt_buffer_head)){
+           printf("tail: %d, tail_phase: %d, head: %d, head_phase: %d\n", 
+                this->chkpt_buffer_tail, this->chkpt_buffer_tail_phase, 
+                this->chkpt_buffer_head, this->chkpt_buffer_head_phase
+            );
+        }
+        assert((this->chkpt_buffer_tail > this->chkpt_buffer_head));
         used = this->chkpt_buffer_tail - this->chkpt_buffer_head;
         free = this->num_checkpoints - used;
         return free;
@@ -170,6 +177,7 @@ void renamer::reset_checkpoint(uint64_t i){
     checkpoint_buffer[i].csr = false;
     checkpoint_buffer[i].exception = false;
 
+    assert_checkpoint_buffer_invariance();
 }
 
 void renamer::free_checkpoint(){
@@ -183,6 +191,7 @@ void renamer::free_checkpoint(){
         chkpt_buffer_head_phase = !chkpt_buffer_head_phase;
     }
 
+    assert_checkpoint_buffer_invariance();
 }
 
 bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
@@ -252,6 +261,9 @@ bool renamer::push_free_list(uint64_t phys_reg){
     if (this->free_list_is_full()){
         return false;
     }
+    if (in_free_list(phys_reg)){
+        printf("renamer::push_free_list() - BAD push. %d is already in FL.\n", phys_reg);
+    }
 
     this->fl.list[this->fl.tail] = phys_reg;
     this->fl.tail++;
@@ -260,10 +272,10 @@ bool renamer::push_free_list(uint64_t phys_reg){
         this->fl.tail_phase = !this->fl.tail_phase;
     }
 
-    //printf("pushing %d to the free list\n", phys_reg);
-    //print_free_list();
+    printf("renamer::push_free_list(): %d to the free list\n", phys_reg);
 
-    assert_free_list_invariance();
+    _fl_count += 1;
+    print_free_list();
     return true; 
 }
 
@@ -282,9 +294,13 @@ uint64_t renamer::pop_free_list(){
         this->fl.head_phase = !this->fl.head_phase;
     }
 
-    //printf("popping %d from the free list\n", result);
+    printf("renamer::pop_free_list(): %d from the free list\n", result);
     //print_free_list();
-    assert_free_list_invariance();
+    _fl_count -= 1;
+    //printf("FL count after pushing to free list: %d\n", _fl_count);
+    //assert_free_list_invariance();
+    
+    print_free_list();   
     return result;
 }
 
@@ -347,6 +363,11 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
 
     this->unmap(old);
 
+    printf("renamer::rename_rdst() - mapped_regs: %d, unmapped_regs: %d\n",
+        this->get_mapped_count(), this->get_unmapped_count()
+    );
+    print_rmt();
+
     return result;
 }
 
@@ -386,8 +407,13 @@ void renamer::checkpoint(){
 }
 
 void renamer::map(uint64_t phys_reg){
-// Clear the unmapped bit of physical register
+    // Clear the unmapped bit of physical register
     prf_unmapped[phys_reg] = 0;
+    //QUESTION: when a register is unmapped, does it mean it has to be
+    //of the free list? can you remove stuff off of free list?
+    //FIXME: experimental!!
+    //assert(!this->in_free_list(phys_reg));
+    //if (this->in_free_list(phys_reg)) printf("%d is mapped AND in free list. error.\n", phys_reg);
 }
 
 void renamer::unmap(uint64_t phys_reg){
@@ -397,28 +423,30 @@ void renamer::unmap(uint64_t phys_reg){
     prf_unmapped[phys_reg] = 1;
     if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
         //push it onto the free list:
-        push_free_list(phys_reg);
+        bool result = push_free_list(phys_reg);
+        if (!result){
+            printf("Could not push to free list since it's full\n");
+            exit(EXIT_FAILURE);
+        }
     }
-    
+   
+    //ensure that registers are not leaked 
+    assert_register_count_cpr();
 }
 
 void renamer::inc_usage_counter(uint64_t phys_reg){
+    //printf("inc_usage_counter: P%lu free list size: %d\n", phys_reg, free_list_regs_available());
     this->prf_usage_counter[phys_reg] += 1;
 }
 
 void renamer::dec_usage_counter(uint64_t phys_reg){
+    //printf("dec_usage_counter: P%lu free list size: %d\n", phys_reg, free_list_regs_available());
     assert(this->prf_usage_counter[phys_reg] > 0);
     this->prf_usage_counter[phys_reg] -= 1;
 
-    if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
-        //push it onto the free list:
-        bool __success = push_free_list(phys_reg);
-        if (!__success){
-            printf("Free list is full; failed to push reclaimed register onto the free list\n");
-            exit(EXIT_FAILURE);
-        }
+    if (this->prf_unmapped[phys_reg] == 1){
+        this->unmap(phys_reg);
     }
-
 }
 
 bool renamer::is_ready(uint64_t phys_reg){
@@ -468,15 +496,12 @@ bool renamer::precommit(uint64_t &chkpt_id,
     csr = checkpoint_buffer[chkpt_buffer_head].csr;
     exception = checkpoint_buffer[chkpt_buffer_head].exception;
 
-    //check if there is at least one more checkpoint after the oldest one
-    if (!checkpoint_buffer_is_empty() && 
-        //see if the number of used checkpoint is at least 2
-        ((num_checkpoints - get_free_checkpoint_count()) > 1)){
-        
-        if (checkpoint_buffer[chkpt_buffer_head].uncompleted_instruction_counter == 0){
-            return true;
-        }
-
+    if ((checkpoint_buffer[chkpt_buffer_head].uncompleted_instruction_counter == 0) &&
+        ((num_checkpoints - get_free_checkpoint_count()) > 1 || 
+          (checkpoint_buffer[chkpt_buffer_head].exception)
+        )
+       ){
+        return true;
     }
 
     return false;
@@ -526,7 +551,7 @@ uint64_t renamer::generate_squash_mask(uint64_t rc){
     uint64_t mask = 0;
     for (uint64_t i = 0; i < num_checkpoints; i++){
         if (chkpt_buffer_head_phase == chkpt_buffer_tail_phase){
-            if ((i > rc) && (i < chkpt_buffer_tail)){
+            if ((i >= rc) && (i < chkpt_buffer_tail)){
                 //set to 1
                 mask += pow(2, i);
             }
@@ -567,14 +592,18 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     //restore the unmapped bits from the rollback checkpoint
     uint64_t unmapped_bit;
+    printf("START: copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
     for (uint64_t j=0; j < num_phys_reg; j++){
-        unmapped_bit = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
-        if (unmapped_bit == 1) this->unmap(j);
-        else this->map(j);
+        prf_unmapped[j] = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
     }
+    printf("END  : copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
 
     //generate squash mask
     squash_mask = generate_squash_mask(rollback_chkpt);
+    printf("renamer::rollback(): squash mask: %X\n", squash_mask);
+    printf("renamer::rollback() ckpt_head: %d, chkpt_tail: %d, rc: %d\n",
+        chkpt_buffer_head, chkpt_buffer_tail, rollback_chkpt
+    );
 
     //update the prf_usage_counter for phys reg. that are checkpointed in the
     //to-be-squashed checkpointed
@@ -582,24 +611,50 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     squash_mask_array = new uint64_t[num_checkpoints];
 
 
-    for (uint64_t j=0; j < num_checkpoints; j++)squash_mask_array[j] = 0;
+    printf("SQUASH_ARRAY: ");
+    for (uint64_t j=0; j < num_checkpoints; j++){
+        squash_mask_array[j] = 0;
+    }
     generate_squash_mask_array(squash_mask_array, rollback_chkpt);
+    printf("SQUASH_ARRAY:\n[");
+    for (uint64_t j=0; j < num_checkpoints; j++){
+        printf("%d ", squash_mask_array[j]);
+    }
+    printf("]\nGENERATED squash mask array and marked the to be squashed\n");
 
+    total_loads = 0;
+    total_stores = 0;
+    total_branches = 0;
+
+    printf("started going over to be squashed checkpoints and dec usage counters\n");
     for (uint64_t j=0; j < num_checkpoints; j++){
         if (squash_mask_array[j] == 1){
+            printf("Checkpoint %d is going to be squashed\n", j);
             for (uint64_t k=0; k < map_table_size; k++){
                 //TODO: verify we need to decreament
+                printf("decreamenting usage counter for phys_reg: %d\n", 
+                    checkpoint_buffer[j].rmt[k]
+                );
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]);
                 //FIXME: do we need to unmap these physical registers?
             }
         } else{
+            // calrify this logic
             if (j != rollback_chkpt){
                 total_loads += checkpoint_buffer[j].load_counter;
                 total_stores += checkpoint_buffer[j].store_counter;
                 total_branches += checkpoint_buffer[j].branch_counter;
             }
         }
+
+        //actually squash the checkpoint
+        if ((squash_mask_array[j] == 1) && (j != rollback_chkpt)){
+            this->reset_checkpoint(j);
+        }
     }
+    printf("DONE going over to be squashed checkpoints and dec usage counters\n");
+
+    //How do actually squash the checkpoint?
 
     //start executing from this point
     checkpoint_buffer[rollback_chkpt].load_counter = 0; 
@@ -610,49 +665,84 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     checkpoint_buffer[rollback_chkpt].csr = false; 
     checkpoint_buffer[rollback_chkpt].exception = false; 
 
+
+    //set the tail right after the rollback checkpoint 
+    uint64_t new_tail = (rollback_chkpt + 1) % num_checkpoints;
+    printf("projected new tail for chkpt_buffer: %d\n", new_tail);
+    while (this->chkpt_buffer_tail != new_tail){
+        this->chkpt_buffer_tail--;
+        printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
+        if (this->chkpt_buffer_tail == 0){
+            this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
+        }
+        if (chkpt_buffer_tail == new_tail) break;
+    }
+
+    reset_checkpoint(chkpt_buffer_tail); //make sure it is empty
+    assert_checkpoint_buffer_invariance();
+
     return squash_mask;
 }
 
+void renamer::assert_checkpoint_buffer_invariance(){
+    //making sure checkpoint buffer is in a consisent state
+    //after any operation
+    //FIXME DISABLING FOR THE MOMENT
+
+    printf("renamer::checkpoint_bueffre_invariance ");
+    printf("chkpt buffer - head: %d, tail: %d, head_phase: %d, tail_phase: %d\n",
+        chkpt_buffer_head, chkpt_buffer_tail, chkpt_buffer_head_phase, chkpt_buffer_tail_phase
+    );
+    if (checkpoint_buffer_is_full()){
+        //it can be full. head == tail and hp != tp
+        return;
+    }
+
+    if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
+        assert(chkpt_buffer_tail > chkpt_buffer_head);
+    }
+    else {
+        assert(chkpt_buffer_tail < chkpt_buffer_head);
+    }
+
+}
+
+
 bool renamer::is_chkpt_valid(uint64_t chkpt_id){
-    printf("is_chkpt_valid()\n");
-    printf("head: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
+    printf("is_chkpt_valid()\nhead: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
         chkpt_buffer_head_phase, chkpt_buffer_tail_phase, chkpt_id);
     /* return true for all the valid checkpoints, INCLUDING the head*/
     if (checkpoint_buffer_is_full()){
-        printf("buffer full clause hit; return true\n");
         return true;
     }
     if (checkpoint_buffer_is_empty()){
-        printf("buffer empty clause hit; return false\n");
         return false;
     }
 
     if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
         assert(chkpt_buffer_tail > chkpt_buffer_head);
         if ((chkpt_id >= chkpt_buffer_head) && (chkpt_buffer_tail > chkpt_id)){
-            printf("same phase, head >=chkpt > tail. return true\n");
             return true;
         } else {
-            printf("same phases, return false\n");
             return false;    
         }
     }
     else {
         assert(chkpt_buffer_tail < chkpt_buffer_head);
         if ((chkpt_id >= chkpt_buffer_head) || (chkpt_buffer_tail > chkpt_id)){
-            printf("diff phase, chkpt  >= head ||  tail > chkpt. return true\n");
             return true; 
         } else {
-            printf("diff phases, return false\n");
             return false;
         }
     }
 
-    printf("end of function. returns ????\n");
+    printf("end of is_chkpt_valid function, should not come here\n");
+    exit(EXIT_FAILURE);
 }
 
 void renamer::squash(){
     //the renamer should be rolled back to the committed state of the machine
+    printf("renamer::squash() initiating a complete squash\n");
 
     //restore the RMT
     uint64_t i;
@@ -693,6 +783,9 @@ void renamer::squash(){
         }
     }
 
+    printf("renamer::squash() DONE a complete squash\n");
+    assert_checkpoint_buffer_invariance();
+
     return;
 }
 
@@ -711,12 +804,22 @@ void renamer::print_free_list(){
             fl.tail, fl.tail_phase, fl.head, fl.head_phase);
 }
 
+/*
+void renamer::print_prf_unampped(){
+    printf("---------------------PRF UNMAPPED-----------------\n");
+    for (int i=0; i < this->num_phys_reg; i++){
+        printf("| %8llu ", prf_unmapped[i]);
+    }
+    printf("\n-------------------END_PRF_UNMAPPED-----------------\n");
+}
+*/
+
 void renamer::print_prf_usage(){
-    printf("---------------------PRF-----------------\n");
+    printf("---------------------PRF_USAGE-----------------\n");
     for (int i=0; i < this->num_phys_reg; i++){
         printf("| %8llu ", prf_usage_counter[i]);
     }
-    printf("\n-------------------END_PRF-----------------\n");
+    printf("\n-------------------END_PRF_USAGE-----------------\n");
 
 }
 /*
@@ -727,6 +830,7 @@ void renamer::print_amt(){
     }
     printf("\n-------------------END_AMT-----------------\n");
 }
+*/
 void renamer::print_rmt(){
     printf("---------------------RMT-----------------\n");
     for (int i=0; i < this->map_table_size; i++){
@@ -735,6 +839,7 @@ void renamer::print_rmt(){
     printf("\n-------------------END_RMT-----------------\n");
 
 }
+/*
 void renamer::print_prf(){
     printf("---------------------PRF-----------------\n");
     for (int i=0; i < this->num_phys_reg; i++){
@@ -778,9 +883,52 @@ void renamer::print_active_list(bool between_head_and_tail){
 }
 */
 
+uint64_t renamer::get_mapped_count(){
+    uint64_t mapped = this->num_phys_reg - this->get_unmapped_count();
+    assert(mapped >= 0);
+
+    return mapped;
+}
+
+uint64_t renamer::get_unmapped_count(){
+    uint64_t i, count=0;
+    for (i=0; i < num_phys_reg; i++){
+        if (this->prf_unmapped[i] == 1){
+            count++;
+        }
+    }
+
+    assert (count >= 0);
+    return count;
+}
+
+void renamer::assert_register_count_cpr(){
+    //available entries in the free list == unmapped regs in prf_unmapped
+    //printf("flcount: %d, unmapped_count: %d\n", this->free_list_regs_available(), this->get_unmapped_count());
+}
+
+bool renamer::in_free_list(uint64_t phys_reg){
+    uint64_t i;
+    for (i=0; i < this->free_list_size; i++){
+        if (this->fl.list[i] == phys_reg){
+            //check validity
+            if (fl.head_phase == fl.tail_phase){
+                if ((i >= fl.head) && (i < fl.tail)){return true;}
+                return false;
+            } else {
+                if ((i < fl.tail) || (i >= fl.head)){return true;}
+                else {return false;}
+            } 
+        }
+    }
+
+    return false;
+}
+
 bool renamer::reg_in_rmt(uint64_t phys_reg){
     uint64_t i;
     for (i=0; i < this->map_table_size; i++){
+    uint64_t get_unmapped_count();
         if (this->rmt[i] == phys_reg) return true;    
     }
     return false;
