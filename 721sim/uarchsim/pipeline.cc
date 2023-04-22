@@ -96,6 +96,7 @@ pipeline_t::pipeline_t(
   //cpr related stuff
   max_instr_bw_checkpoints = rob_size / num_chkpts;
   instr_renamed_since_last_checkpoint = 0; //this will be changed somewhere else later
+  renamer_stalled_cycles_count = 0;
   RETSTATE.state = RETIRE_IDLE;
   RETSTATE.chkpt_id = 0;
   RETSTATE.num_loads_left = 0;

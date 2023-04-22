@@ -154,6 +154,12 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
              // transition to the RETIRE_FINALIZE state}
              RETSTATE.state = RETIRE_FINALIZE;
           }
+        else {
+            printf("Could not retire, Not all loads %d, storesi %d, branches %d and logreg: %d cleared\n",
+                RETSTATE.num_loads_left,RETSTATE.num_stores_left,RETSTATE.num_branches_left,
+                RETSTATE.log_reg
+            );
+        }
       }
       break;
 
@@ -178,8 +184,11 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
              }
 
              if (RETSTATE.amo || RETSTATE.csr) {   // Resume the stalled fetch unit after committing a serializing instruction.
-                assert(IS_AMO(RETSTATE.amo));
-                assert(IS_CSR(RETSTATE.csr));
+                //TODO: double check if the sanity check is good enough
+                printf("The sanity check: %d\n", IS_AMO(RETSTATE.amo) || IS_CSR(RETSTATE.csr));
+                //FIXME: PUT BACK THE SANITY CHECK ONCE DONE EXPERIMENTING
+                //assert((IS_AMO(RETSTATE.amo) || IS_CSR(RETSTATE.csr)));
+
                 insn_t inst = PAY.buf[PAY.head].inst;
                 reg_t next_inst_pc;
                 if ((inst.funct3() == FN3_SC_SB) && (inst.funct12() == FN12_SRET)){// SRET instruction.

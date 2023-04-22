@@ -1,33 +1,41 @@
 #include "pipeline.h"
 
 void pipeline_t::dec_for_pipeline_registers(uint64_t index){
-    printf("START decrementing Source and Destination registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
+    //printf("START decrementing Source and Destination registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
     if (PAY.buf[index].A_valid){
+/*
         printf("%X: decrementing usage counter for A_phys_reg %d\n", PAY.buf[index].pc,
             PAY.buf[index].A_phys_reg
         );
+*/
         REN->dec_usage_counter(PAY.buf[index].A_phys_reg);
     }
     if (PAY.buf[index].B_valid){
+/*
         printf("%X: decrementing usage counter for B_phys_reg %d\n", PAY.buf[index].pc,
             PAY.buf[index].B_phys_reg
         );
+*/
         REN->dec_usage_counter(PAY.buf[index].B_phys_reg);
     }
     if (PAY.buf[index].D_valid){
+/*
         printf("%X: decrementing usage counter for D_phys_reg %d\n", PAY.buf[index].pc,
             PAY.buf[index].D_phys_reg
         );
+*/
         REN->dec_usage_counter(PAY.buf[index].D_phys_reg);
     }
     if (PAY.buf[index].C_valid){
+/*
         printf("%X: decrementing usage counter for C_phys_reg %d\n", PAY.buf[index].pc,
             PAY.buf[index].C_phys_reg
         );
+*/
         REN->dec_usage_counter(PAY.buf[index].C_phys_reg);
     }
 
-    printf("DONE Decremenging Source and Dest registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
+//    printf("DONE Decremenging Source and Dest registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
 }
 
 void pipeline_t::squash_complete(reg_t jump_PC) {

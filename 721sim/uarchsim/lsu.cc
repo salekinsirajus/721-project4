@@ -684,6 +684,7 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
                 if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_valid){
                     proc->REN->dec_usage_counter(proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_phys_reg);
                 }
+                LQ[rc_lq_tail].valid = false;
             }
         }
         rc_lq_tail = MOD_S((rc_lq_tail + 1),lq_size);

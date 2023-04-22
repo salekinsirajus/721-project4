@@ -392,6 +392,8 @@ public:
     //cpr related stuff
     uint64_t max_instr_bw_checkpoints;
     uint64_t instr_renamed_since_last_checkpoint;
+    //temp
+    uint64_t renamer_stalled_cycles_count;
 
     //retirement state machine?
     typedef enum {RETIRE_IDLE, RETIRE_BULK_COMMIT, RETIRE_FINALIZE} retire_state_e;
