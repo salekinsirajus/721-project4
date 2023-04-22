@@ -69,11 +69,14 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             if (RETSTATE.exception){
                   trap = PAY.buf[PAY.head].trap.get();
 
+                  //CPR offending PC fix
+                  offending_PC = PAY.buf[PAY.head].pc; 
                   // CSR exceptions are micro-architectural exceptions and are
                   // not defined by the ISA. These must be handled exclusively by
                   // the micro-arch and is different from other exceptions specified
                   // in the ISA.
                   // This is a serialize trap - Refetch the CSR instruction
+
                   reg_t jump_PC;
                   if (trap->cause() == CAUSE_CSR_INSTRUCTION) {
                     jump_PC = offending_PC;
@@ -146,6 +149,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             (RETSTATE.num_branches_left == 0) &&
             (RETSTATE.log_reg == (NXPR + NFPR))
             ){
+            printf("freeing the oldest checkpoint\n");
              REN->free_checkpoint();
              // transition to the RETIRE_FINALIZE state}
              RETSTATE.state = RETIRE_FINALIZE;

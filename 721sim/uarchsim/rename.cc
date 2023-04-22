@@ -168,7 +168,10 @@ void pipeline_t::rename2() {
    // This is achieved by doing nothing and proceeding to the next statements.
 
    // FIX_ME #2 BEGIN
-   if (REN->stall_checkpoint(bundle_chkpt) == true) return; //Condition 1: not enough free checkpoints
+   if (REN->stall_checkpoint(bundle_chkpt) == true){
+        printf("rename2(): STALLING RENAMER DUE TO INSUFFICIENT FREE CHECKPOINTS\n");
+        return; //Condition 1: not enough free checkpoints
+   }
    if (REN->stall_reg(bundle_dst) == true) return; //condition 2: not enough free physical registers
    // FIX_ME #2 END
 
@@ -280,6 +283,7 @@ void pipeline_t::rename2() {
       printf("%X: checkpoint_id assigned to this instruction: %lu\n", PAY.buf[index].pc, chkpt_ID);
       PAY.buf[index].checkpoint_ID = chkpt_ID;
       RENAME2[i].checkpoint_ID = chkpt_ID;
+      assert(REN->is_chkpt_valid(PAY.buf[index].checkpoint_ID));
 
       // FIX_ME #4
       // Get the instruction's branch mask.

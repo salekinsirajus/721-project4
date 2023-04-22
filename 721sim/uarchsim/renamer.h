@@ -145,7 +145,6 @@ private:
     void unmap(uint64_t);
     void generate_squash_mask_array(uint64_t *array, uint64_t rc);
     uint64_t generate_squash_mask(uint64_t rc);
-    bool is_chkpt_valid(uint64_t chkpt_id);
 
     void print_free_list();
     void print_prf_usage();
@@ -164,6 +163,7 @@ private:
     uint64_t get_unmapped_count();
 
 public:
+    bool is_chkpt_valid(uint64_t chkpt_id);
     ////////////////////////////////////////
     // Public functions.
     ////////////////////////////////////////

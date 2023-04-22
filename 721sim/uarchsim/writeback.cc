@@ -104,6 +104,7 @@ void pipeline_t::writeback(unsigned int lane_number) {
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       // FIX_ME #16 BEGIN
+      printf("%X: index: %d writeback::set_complete(%d)\n",PAY.buf[index].pc, index, PAY.buf[index].checkpoint_ID);
       REN->set_complete(PAY.buf[index].checkpoint_ID);
       // FIX_ME #16 END
 

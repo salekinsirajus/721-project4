@@ -315,6 +315,7 @@ void issue_queue::squash(uint64_t squash_mask) {
             printf("issue_queue::squash() - START decrementing usage_counter\n");
             proc->dec_for_pipeline_registers(q[i].index);
             printf("issue_queue::squash() - END decrementing usage_counter\n");
+            q[i].valid = false;
 			remove(i);
             printf("issue_queue::squash() - Removing the entry from IQ\n");         
 		}
