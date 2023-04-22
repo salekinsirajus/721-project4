@@ -73,7 +73,7 @@ void pipeline_t::rename2() {
    uint64_t instr_renamed_temp = instr_renamed_since_last_checkpoint;
 
    db_t *actual;		// Pointer to corresponding instruction in the functional simulator.
-   printf("====================LOOP1 BEGIN====================\n");
+   //printf("====================LOOP1 BEGIN====================\n");
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
@@ -103,9 +103,9 @@ void pipeline_t::rename2() {
 	        actual = get_pipe()->peek(PAY.buf[index].db_index);
             is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
             is_exception = actual->a_exception;
-            printf("%X: GOOD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+            //printf("%X: GOOD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
       } else {
-            printf("%X:  BAD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+            //printf("%X:  BAD instruction, top loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
       }
 
       if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
@@ -155,7 +155,7 @@ void pipeline_t::rename2() {
 
    }
 
-   printf("====================LOOP1   END====================\n");
+   //printf("====================LOOP1   END====================\n");
 
    // FIX_ME #2
    // Check if the Rename2 Stage must stall due to any of the following conditions:
@@ -169,7 +169,7 @@ void pipeline_t::rename2() {
 
    // FIX_ME #2 BEGIN
    if (REN->stall_checkpoint(bundle_chkpt) == true){
-        printf("rename2(): STALLING RENAMER DUE TO INSUFFICIENT FREE CHECKPOINTS\n");
+        //printf("rename2(): STALLING RENAMER DUE TO INSUFFICIENT FREE CHECKPOINTS\n");
         return; //Condition 1: not enough free checkpoints
    }
    if (REN->stall_reg(bundle_dst) == true) return; //condition 2: not enough free physical registers
@@ -181,7 +181,7 @@ void pipeline_t::rename2() {
    bool place_checkpoint_after = false;
    bool load, store, branch, amo, csr;
    uint64_t chkpt_ID;
-   printf("====================LOOP2 BEGIN===================\n");
+   //printf("====================LOOP2 BEGIN===================\n");
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break;			// Not a valid instruction: Reached the end of the rename bundle so exit loop.
@@ -193,9 +193,9 @@ void pipeline_t::rename2() {
 	        actual = get_pipe()->peek(PAY.buf[index].db_index);
             is_branch_mispr = (actual->a_next_pc != PAY.buf[index].next_pc);
             is_exception = actual->a_exception;
-            printf("%X: GOOD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+            //printf("%X: GOOD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
       } else {
-            printf("%X:  BAD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
+            //printf("%X:  BAD instruction, bottom loop, rename2(). is_exc: %d, br_mispr: %d\n", PAY.buf[index].pc, is_exception, is_branch_mispr);
       }
 
       amo = IS_AMO(PAY.buf[index].flags);
@@ -280,7 +280,7 @@ void pipeline_t::rename2() {
       // FIX_ME #3 END
       
       //Saving the checkpoint ID in the payload buffer
-      printf("%X: checkpoint_id assigned to this instruction: %lu\n", PAY.buf[index].pc, chkpt_ID);
+      //printf("%X: checkpoint_id assigned to this instruction: %lu\n", PAY.buf[index].pc, chkpt_ID);
       PAY.buf[index].checkpoint_ID = chkpt_ID;
       RENAME2[i].checkpoint_ID = chkpt_ID;
       assert(REN->is_chkpt_valid(PAY.buf[index].checkpoint_ID));
@@ -313,7 +313,7 @@ void pipeline_t::rename2() {
 
       // FIX_ME #5 END
    }
-   printf("====================LOOP2   END===================\n");
+   //printf("====================LOOP2   END===================\n");
 
    //
    // Transfer the rename bundle from the Rename Stage to the Dispatch Stage.

@@ -601,7 +601,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
         rollback_chkpt = (chkpt_id + 1) % num_checkpoints; 
     }
 
-    printf("rollback_checkpoint %d in rollback\n", rollback_chkpt);
+    //printf("rollback_checkpoint %d in rollback\n", rollback_chkpt);
     //assert the rollback_chkpt is valid
     assert(is_chkpt_valid(rollback_chkpt));
 
@@ -612,46 +612,46 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     //restore the unmapped bits from the rollback checkpoint
     uint64_t unmapped_bit;
-    printf("START: copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
+    //printf("START: copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
     for (uint64_t j=0; j < num_phys_reg; j++){
         prf_unmapped[j] = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
     }
-    printf("END  : copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
+    //printf("END  : copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
 
     //generate squash mask
     squash_mask = generate_squash_mask(rollback_chkpt);
-    printf("renamer::rollback(): squash mask: %X\n", squash_mask);
-    printf("renamer::rollback() ckpt_head: %d, chkpt_tail: %d, rc: %d\n",
-        chkpt_buffer_head, chkpt_buffer_tail, rollback_chkpt
-    );
+    //printf("renamer::rollback(): squash mask: %X\n", squash_mask);
+    //printf("renamer::rollback() ckpt_head: %d, chkpt_tail: %d, rc: %d\n",
+    //    chkpt_buffer_head, chkpt_buffer_tail, rollback_chkpt
+    //);
 
     //update the prf_usage_counter for phys reg. that are checkpointed in the
     //to-be-squashed checkpointed
     uint64_t *squash_mask_array;
     squash_mask_array = new uint64_t[num_checkpoints];
-    printf("squash mask:\n");
-    std::cout << std::bitset<32>(squash_mask)<< std::endl;
+    //printf("squash mask:\n");
+    //std::cout << std::bitset<32>(squash_mask)<< std::endl;
 
 
     for (uint64_t j=0; j < num_checkpoints; j++){
         squash_mask_array[j] = 0;
     }
     generate_squash_mask_array(squash_mask_array, rollback_chkpt);
-    printf("SQUASH_ARRAY:\n[");
-    for (uint64_t j=0; j < num_checkpoints; j++){
-        printf("%d ", squash_mask_array[j]);
-    }
-    printf("]\nGENERATED squash mask array and marked the to be squashed\n");
+    //printf("SQUASH_ARRAY:\n[");
+    //for (uint64_t j=0; j < num_checkpoints; j++){
+    //    printf("%d ", squash_mask_array[j]);
+    //}
+    //printf("]\nGENERATED squash mask array and marked the to be squashed\n");
 
     total_loads = 0;
     total_stores = 0;
     total_branches = 0;
-    printf("rollback checkpoint: %d\n", rollback_chkpt);
+    //printf("rollback checkpoint: %d\n", rollback_chkpt);
 
-    printf("started going over to be squashed checkpoints and dec usage counters\n");
+    //printf("started going over to be squashed checkpoints and dec usage counters\n");
     for (uint64_t j=0; j < num_checkpoints; j++){
         if (squash_mask_array[j] == 1){
-            printf("Checkpoint %d is going to be squashed\n", j);
+            //printf("Checkpoint %d is going to be squashed\n", j);
             assert(is_chkpt_valid(j));
             for (uint64_t k=0; k < map_table_size; k++){
                 //TODO: verify we need to decreament
@@ -673,7 +673,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
             this->reset_checkpoint(j);
         }
     }
-    printf("DONE going over to be squashed checkpoints and dec usage counters\n");
+    //printf("DONE going over to be squashed checkpoints and dec usage counters\n");
 
     //How do actually squash the checkpoint?
 
@@ -688,9 +688,9 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     //set the tail right after the rollback checkpoint 
     uint64_t new_tail = (rollback_chkpt + 1) % num_checkpoints;
-    printf("projected new tail for chkpt_buffer: %d\n", new_tail);
+    //printf("projected new tail for chkpt_buffer: %d\n", new_tail);
     while (this->chkpt_buffer_tail != new_tail){
-        printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
+        //printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
         chkpt_buffer_tail = (chkpt_buffer_tail - 1) % num_checkpoints; 
         if (this->chkpt_buffer_tail == (num_checkpoints - 1)){
             this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
@@ -711,10 +711,10 @@ void renamer::assert_checkpoint_buffer_invariance(){
     //after any operation
     //FIXME DISABLING FOR THE MOMENT
 
-    printf("renamer::checkpoint_bueffre_invariance ");
-    printf("chkpt buffer - head: %d, tail: %d, head_phase: %d, tail_phase: %d\n",
-        chkpt_buffer_head, chkpt_buffer_tail, chkpt_buffer_head_phase, chkpt_buffer_tail_phase
-    );
+    //printf("renamer::checkpoint_bueffre_invariance ");
+    //printf("chkpt buffer - head: %d, tail: %d, head_phase: %d, tail_phase: %d\n",
+    //    chkpt_buffer_head, chkpt_buffer_tail, chkpt_buffer_head_phase, chkpt_buffer_tail_phase
+    //);
     if (checkpoint_buffer_is_full()){
         //it can be full. head == tail and hp != tp
         return;
@@ -731,8 +731,8 @@ void renamer::assert_checkpoint_buffer_invariance(){
 
 
 bool renamer::is_chkpt_valid(uint64_t chkpt_id){
-    printf("is_chkpt_valid()\nhead: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
-        chkpt_buffer_head_phase, chkpt_buffer_tail_phase, chkpt_id);
+    //printf("is_chkpt_valid()\nhead: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
+    //    chkpt_buffer_head_phase, chkpt_buffer_tail_phase, chkpt_id);
     /* return true for all the valid checkpoints, INCLUDING the head*/
     if (checkpoint_buffer_is_full()){
         return true;
@@ -764,7 +764,7 @@ bool renamer::is_chkpt_valid(uint64_t chkpt_id){
 
 void renamer::squash(){
     //the renamer should be rolled back to the committed state of the machine
-    printf("renamer::squash() initiating a complete squash\n");
+    //printf("renamer::squash() initiating a complete squash\n");
 
     //restore the RMT
     uint64_t i;
@@ -805,7 +805,7 @@ void renamer::squash(){
         }
     }
 
-    printf("renamer::squash() DONE a complete squash\n");
+    //printf("renamer::squash() DONE a complete squash\n");
     assert_checkpoint_buffer_invariance();
 
     return;

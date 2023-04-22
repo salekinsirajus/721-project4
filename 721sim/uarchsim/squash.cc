@@ -118,7 +118,7 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 
 //void pipeline_t::resolve(unsigned int branch_ID, bool correct) {
 void pipeline_t::selective_squash(uint64_t squash_mask) {
-    printf("in pipeline_t:selective_squash: passed squash mask: %lu\n", squash_mask);
+    //printf("in pipeline_t:selective_squash: passed squash mask: %lu\n", squash_mask);
 	unsigned int i, j;
 
     // Squash all instructions in the Decode through Dispatch Stages.
@@ -137,7 +137,7 @@ void pipeline_t::selective_squash(uint64_t squash_mask) {
     }
 
     // Dispatch Stage:
-    printf("pipeline_t:selective_squash() START going over the instructions in dispatch pipeline regs\n");
+    //printf("pipeline_t:selective_squash() START going over the instructions in dispatch pipeline regs\n");
     for (i = 0; i < dispatch_width; i++) {
         //                          This is alwyas 1
         if ((DISPATCH[i].valid) && ((squash_mask & (1UL << PAY.buf[DISPATCH[i].index].checkpoint_ID)) != 0)){
@@ -145,14 +145,14 @@ void pipeline_t::selective_squash(uint64_t squash_mask) {
         }
         DISPATCH[i].valid = false;
     }
-    printf("pipeline_t:selective_squash() END going over the instructions in dispatch pipeline regs\n");
+    //printf("pipeline_t:selective_squash() END going over the instructions in dispatch pipeline regs\n");
 
     // Selectively squash instructions after the branch, in the Schedule through Writeback Stages.
 
     // Schedule Stage:
-    printf("pipeline_t:selective_squash: START calling IQ squash with squash mask\n");
+    //printf("pipeline_t:selective_squash: START calling IQ squash with squash mask\n");
     IQ.squash(squash_mask);
-    printf("pipeline_t:selective_squash: END   calling IQ squash with squash mask\n");
+    //printf("pipeline_t:selective_squash: END   calling IQ squash with squash mask\n");
 
     //WIP
     for (i = 0; i < issue_width; i++) {
@@ -173,7 +173,7 @@ void pipeline_t::selective_squash(uint64_t squash_mask) {
            if (Execution_Lanes[i].ex[j].valid && BIT_IS_ONE(squash_mask, PAY.buf[Execution_Lanes[i].ex[j].index].checkpoint_ID)) {
             //dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
             if ((PAY.buf[Execution_Lanes[i].ex[j].index].C_valid)){
-                printf("EX: squashing the dest register for %d\n", PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
+                //printf("EX: squashing the dest register for %d\n", PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
                 REN->dec_usage_counter(PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
             }
             Execution_Lanes[i].ex[j].valid = false;
