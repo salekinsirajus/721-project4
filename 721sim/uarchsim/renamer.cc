@@ -214,9 +214,9 @@ uint64_t renamer::get_checkpoint_ID(bool load, bool store, bool branch, bool amo
     }
 
     //increament other counters, set the flags etc
-    if (load){checkpoint_buffer[checkpoint_ID].load_counter++;}
-    if (store){checkpoint_buffer[checkpoint_ID].store_counter++;}
-    if (branch){checkpoint_buffer[checkpoint_ID].branch_counter++;}
+    if (load == true){checkpoint_buffer[checkpoint_ID].load_counter++;}
+    if (store == true){checkpoint_buffer[checkpoint_ID].store_counter++;}
+    if (branch == true){checkpoint_buffer[checkpoint_ID].branch_counter++;}
 
     
     checkpoint_buffer[checkpoint_ID].amo = amo;
@@ -400,8 +400,8 @@ void renamer::checkpoint(){
         chkpt_buffer_tail = 0;
         chkpt_buffer_tail_phase = !chkpt_buffer_tail_phase;
     }
-    printf("generating a new checkpoint: %d\n", chkpt_buffer_tail);
-    printf("free checkpoint available: %d\n", get_free_checkpoint_count());
+    //printf("generating a new checkpoint: %d\n", chkpt_buffer_tail);
+    //printf("free checkpoint available: %d\n", get_free_checkpoint_count());
 }
 
 void renamer::map(uint64_t phys_reg){
@@ -488,16 +488,30 @@ bool renamer::precommit(uint64_t &chkpt_id,
                         ){
 
     chkpt_id = chkpt_buffer_head;
-    num_loads = checkpoint_buffer[chkpt_buffer_head].load_counter;
-    num_stores = checkpoint_buffer[chkpt_buffer_head].store_counter;
-    num_branches = checkpoint_buffer[chkpt_buffer_head].branch_counter;
-    amo = checkpoint_buffer[chkpt_buffer_head].amo;
-    csr = checkpoint_buffer[chkpt_buffer_head].csr;
-    exception = checkpoint_buffer[chkpt_buffer_head].exception;
 
-    if ((checkpoint_buffer[chkpt_buffer_head].uncompleted_instruction_counter == 0) &&
+    num_loads = checkpoint_buffer[chkpt_id].load_counter;
+    num_stores = checkpoint_buffer[chkpt_id].store_counter;
+    num_branches = checkpoint_buffer[chkpt_id].branch_counter;
+
+    amo = checkpoint_buffer[chkpt_id].amo;
+    csr = checkpoint_buffer[chkpt_id].csr;
+    exception = checkpoint_buffer[chkpt_id].exception;
+
+    /*
+    printf("precommit - chkpt_head %d(%d), chkpt_tail %d(%d), free_count: %d\n",
+        chkpt_id, chkpt_buffer_head_phase, chkpt_buffer_tail, chkpt_buffer_tail_phase,
+        get_free_checkpoint_count()
+    );
+    printf("precommit: ic: %d, used chkpts: %d, exception: %d\n",
+        checkpoint_buffer[chkpt_id].uncompleted_instruction_counter,
+        (num_checkpoints - get_free_checkpoint_count()),
+        checkpoint_buffer[chkpt_id].exception
+    );
+    */
+
+    if ((checkpoint_buffer[chkpt_id].uncompleted_instruction_counter == 0) &&
         (((num_checkpoints - get_free_checkpoint_count()) > 1 )|| 
-          (checkpoint_buffer[chkpt_buffer_head].exception)
+          (checkpoint_buffer[chkpt_id].exception)
         )
        ){
         return true;
@@ -614,11 +628,13 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
         } else{
             // calrify this logic
 
+/*
             if (j != rollback_chkpt){
                 total_loads += checkpoint_buffer[j].load_counter;
                 total_stores += checkpoint_buffer[j].store_counter;
                 total_branches += checkpoint_buffer[j].branch_counter;
             }
+*/
 
         }
 
@@ -657,10 +673,12 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     reset_checkpoint(chkpt_buffer_tail); //make sure it is empty
     assert_checkpoint_buffer_invariance();
 
-    printf("Beginning of rollbac - chkpt_head %d(%d), chkpt_tail %d(%d), rc: %d, free_count: %d\n",
+    /*
+    printf("End of rollback - chkpt_head %d(%d), chkpt_tail %d(%d), rc: %d, free_count: %d\n",
         chkpt_buffer_head, chkpt_buffer_head_phase, chkpt_buffer_tail, chkpt_buffer_tail_phase,
         rollback_chkpt, get_free_checkpoint_count()
     );
+    */
     return squash_mask;
 }
 

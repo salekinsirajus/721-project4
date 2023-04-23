@@ -169,9 +169,9 @@ void pipeline_t::rename2() {
 
    // FIX_ME #2 BEGIN
    if (REN->stall_checkpoint(bundle_chkpt) == true){
-        printf("rename2(): STALLING RENAMER DUE TO INSUFFICIENT FREE CHECKPOINTS\n");
+        //printf("rename2(): STALLING RENAMER DUE TO INSUFFICIENT FREE CHECKPOINTS\n");
         renamer_stalled_cycles_count++;
-        if (renamer_stalled_cycles_count >= 500) exit(EXIT_FAILURE);
+        //if (renamer_stalled_cycles_count >= 500) exit(EXIT_FAILURE);
         return; //Condition 1: not enough free checkpoints
    } else {
         renamer_stalled_cycles_count = 0;

@@ -29,6 +29,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                                  RETSTATE.num_stores_left, RETSTATE.num_branches_left, 
                                  RETSTATE.amo, RETSTATE.csr, RETSTATE.exception);
         if (!proceed) {
+            //printf("pipeline_t::retire() - renamer::precommit is returning false\n");
             return;
         }
         else { //can proceed
@@ -149,13 +150,13 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             (RETSTATE.num_branches_left == 0) &&
             (RETSTATE.log_reg == (NXPR + NFPR))
             ){
-            printf("freeing the oldest checkpoint\n");
+            //printf("freeing the oldest checkpoint\n");
              REN->free_checkpoint();
              // transition to the RETIRE_FINALIZE state}
              RETSTATE.state = RETIRE_FINALIZE;
           }
         else {
-            printf("Could not retire, Not all loads %d, storesi %d, branches %d and logreg: %d cleared\n",
+            //printf("Could not retire, Not all loads %d, stores %d, branches %d and logreg: %d cleared\n",
                 RETSTATE.num_loads_left,RETSTATE.num_stores_left,RETSTATE.num_branches_left,
                 RETSTATE.log_reg
             );
