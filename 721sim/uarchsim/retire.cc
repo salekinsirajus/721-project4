@@ -156,10 +156,12 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
              RETSTATE.state = RETIRE_FINALIZE;
           }
         else {
-            //printf("Could not retire, Not all loads %d, stores %d, branches %d and logreg: %d cleared\n",
+            /*
+            printf("Could not retire, Not all loads %d, stores %d, branches %d and logreg: %d cleared\n",
                 RETSTATE.num_loads_left,RETSTATE.num_stores_left,RETSTATE.num_branches_left,
                 RETSTATE.log_reg
             );
+            */
         }
       }
       break;
