@@ -562,10 +562,12 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     else {
         rollback_chkpt = (chkpt_id + 1) % num_checkpoints; 
     }
+    /* 
     printf("Beginning of rollbac - chkpt_head %d(%d), chkpt_tail %d(%d), rc: %d, free_count: %d\n",
         chkpt_buffer_head, chkpt_buffer_head_phase, chkpt_buffer_tail, chkpt_buffer_tail_phase,
         rollback_chkpt, get_free_checkpoint_count()
     );
+    */
 
     //printf("rollback_checkpoint %d in rollback\n", rollback_chkpt);
     //assert the rollback_chkpt is valid
