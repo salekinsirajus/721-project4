@@ -33,6 +33,7 @@ issue_queue::issue_queue(unsigned int size, unsigned int num_parts, pipeline_t* 
 }
 
 bool issue_queue::stall(unsigned int bundle_inst) {
+    //printf("DEBUG: issue queue is being stalled\n");
 	assert((length + fl_length) == size);
   ifprintf(logging_on,proc->dispatch_log,"ISSUE_QUEUE: Checking for stall fl_length: %u  length: %u bundle_inst: %u stall: %s\n",fl_length,length,bundle_inst,(fl_length < bundle_inst)?"true":"false");
 	return(fl_length < bundle_inst);
