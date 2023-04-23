@@ -656,6 +656,29 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
     unsigned int rc_lq_tail = recover_lq_tail;
     unsigned int rc_lq_tail_phase = recover_lq_tail_phase;
 
+    /*
+    printf("lsu::restore() - BEFORE STARTING THIS old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
+    if (rc_lq_tail != old_lq_tail){
+        rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
+    }
+    */
+    //printf("lsu::restore() - AFTER incrementing outside the loop. old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
+    while (old_lq_tail != rc_lq_tail){
+        //printf("lsu::restore() - in the loop old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
+        if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].pc == 97804) printf("97804 being squashed\n");
+        if (LQ[rc_lq_tail].valid){
+            if ((LQ[rc_lq_tail].addr_avail) && (!LQ[rc_lq_tail].value_avail)){
+                if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_valid){
+         //           printf("invalidated %d in LQ\n: PC :%X\n", rc_lq_tail,proc->PAY.buf[LQ[rc_lq_tail].pay_index].pc);
+                    proc->REN->dec_usage_counter(proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_phys_reg);
+                }
+                LQ[rc_lq_tail].valid = false;
+            }
+        }
+        rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
+        if (old_lq_tail == rc_lq_tail) break;
+    }
+
 	// Restore tail state.
 	lq_tail = recover_lq_tail;
 	lq_tail_phase = recover_lq_tail_phase;
@@ -678,18 +701,6 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 		LQ[j].valid = true;
 	}
 
-    while (old_lq_tail != rc_lq_tail){
-        if (LQ[rc_lq_tail].valid){
-            if ((LQ[rc_lq_tail].addr_avail) && (!LQ[rc_lq_tail].value_avail)){
-                if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_valid){
-                    proc->REN->dec_usage_counter(proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_phys_reg);
-                }
-                LQ[rc_lq_tail].valid = false;
-            }
-        }
-        rc_lq_tail = MOD_S((rc_lq_tail + 1),lq_size);
-        //if (old_lq_tail == rc_lq_tail) break;
-    }
 
     /*
     for(unsigned int i = 0; i < lq_size; i++){
