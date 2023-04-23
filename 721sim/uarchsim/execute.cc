@@ -105,7 +105,8 @@ void pipeline_t::execute(unsigned int lane_number) {
             }
          }
       }
-      else {
+      //else {
+      else if (!IS_AMO(PAY.buf[index].flags) && !IS_CSR(PAY.buf[index].flags)) {
          // Execute the ALU-type instruction on the ALU.
          try {
             alu(index);
