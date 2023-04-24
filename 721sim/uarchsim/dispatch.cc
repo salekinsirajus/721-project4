@@ -314,12 +314,6 @@ void pipeline_t::dispatch() {
       if (PAY.buf[index].checkpoint) {
          LSU.checkpoint(PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase, PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
       }
-       
-	insn_t inst;
-    inst = PAY.buf[index].inst;
-    if ((inst.opcode() == OP_JAL) || (inst.opcode() == OP_JALR) || (IS_BRANCH(PAY.buf[index].flags))){
-         LSU.checkpoint(PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase, PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
-      }
    }
 }
 
