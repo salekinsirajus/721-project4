@@ -437,5 +437,6 @@ public:
 
 //reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc);
 
+extern void update_timer(state_t* state, size_t instret);
 
 #endif //RISCV_PIPELINE_H

@@ -488,7 +488,7 @@ static reg_t execute_insn(pipeline_t* p, reg_t pc, insn_fetch_t fetch)
 }
 
 //Scope of this function is just this file
-static void update_timer(state_t* state, size_t instret)
+extern void update_timer(state_t* state, size_t instret)
 {
   uint64_t count0 = (uint64_t)(uint32_t)state->count;
   state->count += instret;

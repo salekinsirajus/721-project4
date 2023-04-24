@@ -3,6 +3,7 @@
 #include "mmu.h"
 
 //copied over from pipeline.cc since its scope was limited to that file only
+/*
 static void update_timer(state_t* state, size_t instret)
 {
   uint64_t count0 = (uint64_t)(uint32_t)state->count;
@@ -11,7 +12,7 @@ static void update_timer(state_t* state, size_t instret)
   if (int64_t(before ^ (before + instret)) < 0)
     state->sr |= (1 << (IRQ_TIMER + SR_IP_SHIFT));
 }
-
+*/
 
 void pipeline_t::retire(size_t& instret, size_t instret_limit) {
   bool proceed;
@@ -111,6 +112,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                 RETSTATE.log_reg = 0;
             }
          }
+            update_timer(&state, 1); // Update timer by 1 retired instr. 
       }
       break;
 
@@ -154,15 +156,10 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
              REN->free_checkpoint();
              // transition to the RETIRE_FINALIZE state}
              RETSTATE.state = RETIRE_FINALIZE;
+            
           }
-        else {
-            /*
-            printf("Could not retire, Not all loads %d, stores %d, branches %d and logreg: %d cleared\n",
-                RETSTATE.num_loads_left,RETSTATE.num_stores_left,RETSTATE.num_branches_left,
-                RETSTATE.log_reg
-            );
-            */
-        }
+         
+         update_timer(&state, 1); // Update timer by 1 retired instr. 
       }
       break;
 
