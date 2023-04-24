@@ -346,16 +346,19 @@ void lsu::store_addr(cycle_t cycle,
 
    // Detect and mark load violations.
    //TODO/FIXME: Probably will need for CPR phase 2
-/*
+
    if (SPEC_DISAMBIG) {
+      printf("SPEC_DISAMBIG: load violation.\n");
+    /*
       unsigned int load_entry;
       unsigned int al_index;
       if (ld_violation(sq_index, lq_index, lq_index_phase, load_entry)) {
          al_index = proc->PAY.buf[LQ[load_entry].pay_index].AL_index;
          proc->set_load_violation(al_index);
       }
+    */
    }
-*/
+
 
    if (!PERFECT_DCACHE) {
       bool hit;
@@ -468,6 +471,7 @@ void lsu::execute_load(cycle_t cycle,
            }
            else {
 	      // Load reservation has not yet reached the head of the LQ and must stall.
+          
 	      return;
 	   }
         }
@@ -491,6 +495,7 @@ void lsu::execute_load(cycle_t cycle,
            uint64_t load_chkpt_id = proc->PAY.buf[LQ[lq_index].pay_index].checkpoint_ID;
            uint64_t store_chkpt_id = proc->PAY.buf[SQ[store_entry].pay_index].checkpoint_ID;
       if (load_chkpt_id == store_chkpt_id) {
+         printf("lsu patch: load_chkpt_id and store_chkpt_id are the same\n");
          // The conflicting store and load of different sizes are in the same checkpoint interval.
          // Don't stall the load, otherwise CPR will deadlock.
          // This should be rare, so rather than model the complexity of partial store-load forwarding,
@@ -499,9 +504,11 @@ void lsu::execute_load(cycle_t cycle,
          if (proc->PAY.buf[LQ[lq_index].pay_index].good_instruction) {
                  db_t *actual = proc->get_pipe()->peek(proc->PAY.buf[LQ[lq_index].pay_index].db_index);
             LQ[lq_index].value = actual->a_rdst[0].value;
+            printf("first if: cheating with functional simulator\n");
          }
          else {
         // Load will in any case get squashed (incorrect control-flow path), so use a sentinel value.
+            printf("else: setting DEADBEEF since it will get squashed anyway??\n");
             LQ[lq_index].value = 0xDEADBEEF;
          }
          // The load value is now available.
@@ -514,6 +521,7 @@ void lsu::execute_load(cycle_t cycle,
          // The conflicting store and load of different sizes are in different checkpoint intervals.
          // Stalling the load will not cause CPR to deadlock.
          // STATS
+         printf("The conflicting store and load of different sizes are in different checkpoint intervals\n");
          LQ[lq_index].stat_load_stall_disambig = true;
       }
    }
@@ -652,34 +660,50 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 	/////////////////////////////
 
     unsigned int old_lq_tail = lq_tail;
-    unsigned int old_lq_tail_phase = lq_tail_phase;
     unsigned int rc_lq_tail = recover_lq_tail;
-    unsigned int rc_lq_tail_phase = recover_lq_tail_phase;
 
     /*
-    printf("lsu::restore() - BEFORE STARTING THIS old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
-    if (rc_lq_tail != old_lq_tail){
-        rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
-    }
+    printf("lsu::restore() - started restoring. rc_lq_tail %d, old_lq_tail: %d\n", 
+        rc_lq_tail, old_lq_tail
+    );
     */
-    //printf("lsu::restore() - AFTER incrementing outside the loop. old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
     while (old_lq_tail != rc_lq_tail){
-        //printf("lsu::restore() - in the loop old_lq_tail: %d, rc_lq_tail: %d\n", old_lq_tail, rc_lq_tail);
-        if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].pc == 97804) printf("97804 being squashed\n");
-        if (LQ[rc_lq_tail].valid){
+        if (rc_lq_tail == 90){
+            printf("RC LQ Tail: %d\n", rc_lq_tail);
+        }
+
+        //if (LQ[rc_lq_tail].valid){
             if ((LQ[rc_lq_tail].addr_avail) && (!LQ[rc_lq_tail].value_avail)){
                 if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_valid){
-         //           printf("invalidated %d in LQ\n: PC :%X\n", rc_lq_tail,proc->PAY.buf[LQ[rc_lq_tail].pay_index].pc);
                     proc->REN->dec_usage_counter(proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_phys_reg);
                 }
-                LQ[rc_lq_tail].valid = false;
             }
-        }
+        //}
+        LQ[rc_lq_tail].valid = false;
         rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
-        if (old_lq_tail == rc_lq_tail) break;
     }
 
+    //printf("lsu::restore() - ENDED   restoring. rc_lq_tail %d, old_lq_tail: %d\n", rc_lq_tail, old_lq_tail);
+
+
 	// Restore tail state.
+	/////////////////////////////
+	// Restore SQ.
+	/////////////////////////////
+    unsigned int old_sq_tail = sq_tail;
+    //unsigned int old_sq_tail = proc->PAY.buf[proc->PAY.head].SQ_index;
+    unsigned int rc_sq_tail = recover_sq_tail;
+
+    printf("lsu::restore() - STARTED  restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+    while (old_sq_tail != rc_sq_tail){
+        printf("RC SQ Tail: %d, addr_avail: %d, val_avail: %d\n", rc_sq_tail, SQ[rc_sq_tail].addr_avail, SQ[rc_sq_tail].value_avail);
+
+            SQ[rc_sq_tail].valid = false;
+        rc_sq_tail = MOD_S((rc_sq_tail + 1), sq_size);
+    }
+
+    printf("lsu::restore() - ENDED   restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+
 	lq_tail = recover_lq_tail;
 	lq_tail_phase = recover_lq_tail_phase;
 
@@ -688,37 +712,17 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 	if ((lq_length == 0) && (lq_tail_phase != lq_head_phase)) {
 		lq_length = lq_size;
 	}
-
+    
 	// Restore valid bits in two steps:
 	// (1) Clear all valid bits.
 	// (2) Set valid bits between head and tail.
-
-	for (unsigned int i = 0; i < lq_size; i++) {
-		LQ[i].valid = false;
-	}
-
-	for (unsigned int i = 0, j = lq_head; i < lq_length; i++, j = MOD_S((j+1), lq_size)) {
-		LQ[j].valid = true;
-	}
-
-
-    /*
-    for(unsigned int i = 0; i < lq_size; i++){
-        if (LQ[i].valid){
-            if ((LQ[i].addr_avail) && (!LQ[i].value_avail)){
-                if (proc->PAY.buf[LQ[i].pay_index].C_valid){
-                    proc->REN->dec_usage_counter(proc->PAY.buf[LQ[i].pay_index].C_phys_reg);
-                }
-            }
-        }
+    for (unsigned int i = 0; i < lq_size; i++) {
+        LQ[i].valid = false;
     }
-    */
+    for (unsigned int i = 0, j = lq_head; i < lq_length; i++, j = MOD_S((j+1), lq_size)) {
+        LQ[j].valid = true;
+    }
 
-	/////////////////////////////
-	// Restore SQ.
-	/////////////////////////////
-
-	// Restore tail state.
 	sq_tail = recover_sq_tail;
 	sq_tail_phase = recover_sq_tail_phase;
 
