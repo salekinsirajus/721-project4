@@ -72,6 +72,7 @@ void pipeline_t::writeback(unsigned int lane_number) {
             // FIX_ME #15c END
 
             // Restore the LQ/SQ.
+            printf("before calling LSU.restore rec_SQ_index: %d, PAY.head.SQ_index: %d\n", PAY.buf[index].SQ_index, PAY.buf[PAY.head].SQ_index);
             LSU.restore(PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase, PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
 
             // FIX_ME #15d

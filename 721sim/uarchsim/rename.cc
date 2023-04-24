@@ -231,6 +231,8 @@ void pipeline_t::rename2() {
       else if ((is_branch_mispr == true) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints)){
         place_checkpoint_after = true;
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
+        //if (is_branch_mispr) printf("\n========\nTHERE GOES A BRANCH MISPREDICT, chkpt_id: %d\n", chkpt_ID);
+        
       }
       else { //for every regular Joe instruciontion
         place_checkpoint_after = false;
