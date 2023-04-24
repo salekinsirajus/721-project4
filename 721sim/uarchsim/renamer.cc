@@ -158,12 +158,6 @@ uint64_t renamer::get_free_checkpoint_count(){
 }
 
 void renamer::reset_checkpoint(uint64_t i){
-    for (uint64_t k=0; k < map_table_size; k++){
-        checkpoint_buffer[i].rmt[k] = 0;
-    }
-    for (uint64_t k=0; k < num_phys_reg; k++){
-        checkpoint_buffer[i].unmapped_bits[k] = 1;
-    }
 
     checkpoint_buffer[i].load_counter = 0;
     checkpoint_buffer[i].store_counter = 0;
@@ -415,9 +409,9 @@ void renamer::map(uint64_t phys_reg){
 }
 
 void renamer::unmap(uint64_t phys_reg){
-// Set the unmapped bit of physical register
-// Check if phys_reg’s usage counter is 0; if so,
-// push phys_reg onto the Free List.
+    // Set the unmapped bit of physical register
+    // Check if phys_reg’s usage counter is 0; if so,
+    // push phys_reg onto the Free List.
     prf_unmapped[phys_reg] = 1;
     if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
         //push it onto the free list:
@@ -583,6 +577,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     //printf("START: copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
     for (uint64_t j=0; j < num_phys_reg; j++){
         prf_unmapped[j] = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
+       
     }
     //printf("END  : copying over the rollback checkpoints unmapped bits to prf_unmapped\n");
 
@@ -622,22 +617,9 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
             //printf("Checkpoint %d is going to be squashed\n", j);
             assert(is_chkpt_valid(j));
             for (uint64_t k=0; k < map_table_size; k++){
-                //TODO: verify we need to decreament
                 //printf("decreamenting usage counter for phys_reg: %d\n", checkpoint_buffer[j].rmt[k]);
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]);
-                //FIXME: do we need to unmap these physical registers?
             }
-        } else{
-            // calrify this logic
-
-/*
-            if (j != rollback_chkpt){
-                total_loads += checkpoint_buffer[j].load_counter;
-                total_stores += checkpoint_buffer[j].store_counter;
-                total_branches += checkpoint_buffer[j].branch_counter;
-            }
-*/
-
         }
 
         //actually squash the checkpoint
@@ -647,7 +629,6 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
     //printf("DONE going over to be squashed checkpoints and dec usage counters\n");
 
-    //How do actually squash the checkpoint?
 
     //start executing from this point
     checkpoint_buffer[rollback_chkpt].load_counter = 0; 
@@ -664,6 +645,15 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     while (this->chkpt_buffer_tail != new_tail){
         //printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
         chkpt_buffer_tail = (chkpt_buffer_tail - 1) % num_checkpoints; 
+
+        checkpoint_buffer[chkpt_buffer_tail].load_counter = 0; 
+        checkpoint_buffer[chkpt_buffer_tail].store_counter = 0; 
+        checkpoint_buffer[chkpt_buffer_tail].branch_counter = 0; 
+        checkpoint_buffer[chkpt_buffer_tail].uncompleted_instruction_counter = 0; 
+        checkpoint_buffer[chkpt_buffer_tail].amo = false; 
+        checkpoint_buffer[chkpt_buffer_tail].csr = false; 
+        checkpoint_buffer[chkpt_buffer_tail].exception = false; 
+
         if (this->chkpt_buffer_tail == (num_checkpoints - 1)){
             this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
         }
