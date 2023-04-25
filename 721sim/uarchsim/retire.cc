@@ -2,6 +2,9 @@
 #include "trap.h"
 #include "mmu.h"
 
+#undef STATE
+#define STATE state
+
 //copied over from pipeline.cc since its scope was limited to that file only
 /*
 static void update_timer(state_t* state, size_t instret)
@@ -13,6 +16,7 @@ static void update_timer(state_t* state, size_t instret)
     state->sr |= (1 << (IRQ_TIMER + SR_IP_SHIFT));
 }
 */
+extern void update_timer(state_t* state, size_t instret);
 
 void pipeline_t::retire(size_t& instret, size_t instret_limit) {
   bool proceed;
@@ -20,6 +24,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
   bool amo_success;
   reg_t offending_PC;
   trap_t *trap = NULL; // Supress uninitialized warning.
+  
 
   bool load, store;  //FIXME: where to declare it?????
   uint64_t index;
@@ -31,6 +36,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                                  RETSTATE.amo, RETSTATE.csr, RETSTATE.exception);
         if (!proceed) {
             //printf("pipeline_t::retire() - renamer::precommit is returning false\n");
+                  //assert(instret <= instret_limit);
             return;
         }
         else { //can proceed
@@ -56,6 +62,7 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                 if (RETSTATE.amo && !(load || store)){ 
                     // amo, excluding load-with-reservation (LR) and store-conditional (SC)
                     RETSTATE.exception = execute_amo(); 
+
                 } 
                 //FIXME: do we need to check for !(load || store)????????
                 else if (RETSTATE.csr) { 
@@ -69,10 +76,10 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             } //(!RETSTATE.exception) end
 
             if (RETSTATE.exception){
-                  trap = PAY.buf[PAY.head].trap.get();
-
                   //CPR offending PC fix
                   offending_PC = PAY.buf[PAY.head].pc; 
+                  trap = PAY.buf[PAY.head].trap.get();
+
                   // CSR exceptions are micro-architectural exceptions and are
                   // not defined by the ISA. These must be handled exclusively by
                   // the micro-arch and is different from other exceptions specified
@@ -112,7 +119,6 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
                 RETSTATE.log_reg = 0;
             }
          }
-            update_timer(&state, 1); // Update timer by 1 retired instr. 
       }
       break;
 
@@ -155,11 +161,10 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
             //printf("freeing the oldest checkpoint\n");
              REN->free_checkpoint();
              // transition to the RETIRE_FINALIZE state}
-             RETSTATE.state = RETIRE_FINALIZE;
+             RETSTATE.state = RETIRE_FINALIZE;  
             
           }
          
-         update_timer(&state, 1); // Update timer by 1 retired instr. 
       }
       break;
 

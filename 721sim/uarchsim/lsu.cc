@@ -662,14 +662,10 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
     unsigned int old_lq_tail = lq_tail;
     unsigned int rc_lq_tail = recover_lq_tail;
 
-    /*
-    printf("lsu::restore() - started restoring. rc_lq_tail %d, old_lq_tail: %d\n", 
-        rc_lq_tail, old_lq_tail
-    );
-    */
+
     while (old_lq_tail != rc_lq_tail){
         if (rc_lq_tail == 90){
-            printf("RC LQ Tail: %d\n", rc_lq_tail);
+            //printf("RC LQ Tail: %d\n", rc_lq_tail);
         }
 
         //if (LQ[rc_lq_tail].valid){
@@ -683,6 +679,16 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
         rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
     }
 
+    //edge case
+/*
+    if (recover_lq_tail == lq_tail){
+        if ((LQ[lq_tail].addr_avail) && (!LQ[lq_tail].value_avail)){
+            if (proc->PAY.buf[LQ[lq_tail].pay_index].C_valid){
+                proc->REN->dec_usage_counter(proc->PAY.buf[LQ[lq_tail].pay_index].C_phys_reg);
+            }
+        }
+    }
+*/
     //printf("lsu::restore() - ENDED   restoring. rc_lq_tail %d, old_lq_tail: %d\n", rc_lq_tail, old_lq_tail);
 
 
@@ -694,15 +700,17 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
     //unsigned int old_sq_tail = proc->PAY.buf[proc->PAY.head].SQ_index;
     unsigned int rc_sq_tail = recover_sq_tail;
 
-    printf("lsu::restore() - STARTED  restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+   // printf("lsu::restore() - STARTED  restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
     while (old_sq_tail != rc_sq_tail){
-        printf("RC SQ Tail: %d, addr_avail: %d, val_avail: %d\n", rc_sq_tail, SQ[rc_sq_tail].addr_avail, SQ[rc_sq_tail].value_avail);
+        //printf("RC SQ Tail: %d, addr_avail: %d, val_avail: %d\n", rc_sq_tail, SQ[rc_sq_tail].addr_avail, SQ[rc_sq_tail].value_avail);
 
             SQ[rc_sq_tail].valid = false;
         rc_sq_tail = MOD_S((rc_sq_tail + 1), sq_size);
     }
-
-    printf("lsu::restore() - ENDED   restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+/*
+    if (sq_tail == recover_lq_tail){SQ[sq_tail].valid = false;}
+    //printf("lsu::restore() - ENDED   restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+*/
 
 	lq_tail = recover_lq_tail;
 	lq_tail_phase = recover_lq_tail_phase;
