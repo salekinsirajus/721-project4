@@ -121,6 +121,8 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	}
 
 	LSU.flush();
+
+    instr_renamed_since_last_checkpoint = 0;
 }
 
 

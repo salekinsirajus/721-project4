@@ -93,6 +93,8 @@ void pipeline_t::writeback(unsigned int lane_number) {
 
             // Rollback PAY to the point of the branch.
             PAY.rollback(index);
+            // resetting after a rollback
+            instr_renamed_since_last_checkpoint = 0;
         }
       }
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
