@@ -313,12 +313,9 @@ void issue_queue::squash(uint64_t squash_mask) {
 	for (unsigned int i = 0; i < size; i++) {
         chkpt_id = q[i].checkpoint_ID;
 		if (q[i].valid && BIT_IS_ONE(squash_mask, chkpt_id)) {
-            //printf("issue_queue::squash() - START decrementing usage_counter\n");
             proc->dec_for_pipeline_registers(q[i].index);
-            //printf("issue_queue::squash() - END decrementing usage_counter\n");
             q[i].valid = false;
 			remove(i);
-            //printf("issue_queue::squash() - Removing the entry from IQ\n");         
 		}
 	}
 }
