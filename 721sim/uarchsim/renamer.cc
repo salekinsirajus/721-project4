@@ -408,7 +408,8 @@ void renamer::unmap(uint64_t phys_reg){
         bool result = push_free_list(phys_reg);
         if (!result){
             printf("Could not push to free list since it's full\n");
-            exit(EXIT_FAILURE);
+            assert(0);
+            //exit(EXIT_FAILURE);
         }
     }
 }

@@ -108,16 +108,22 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
             dec_for_pipeline_registers(Execution_Lanes[i].rr.index);
         }
 		Execution_Lanes[i].rr.valid = false;
-		for (j = 0; j < Execution_Lanes[i].ex_depth; j++){
-           if(Execution_Lanes[i].ex[j].valid){
-                dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
+
+        // Execute Stage:
+        for (j = 0; j < Execution_Lanes[i].ex_depth; j++) {
+           if (Execution_Lanes[i].ex[j].valid){
+            //dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
+            if ((PAY.buf[Execution_Lanes[i].ex[j].index].C_valid)){
+                REN->dec_usage_counter(PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
             }
-		   Execution_Lanes[i].ex[j].valid = false;
+            Execution_Lanes[i].ex[j].valid = false;
+            }
         }
+
+
 		if (Execution_Lanes[i].wb.valid){
-            dec_for_pipeline_registers(Execution_Lanes[i].wb.index);
+		    Execution_Lanes[i].wb.valid = false;
         }
-		Execution_Lanes[i].wb.valid = false;
 	}
 
 	LSU.flush();
