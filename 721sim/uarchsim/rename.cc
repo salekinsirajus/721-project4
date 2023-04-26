@@ -126,7 +126,7 @@ void pipeline_t::rename2() {
         simulate_place_checkpoint_after = false;
       }
 
-      else if ((is_branch_mispr == true) || (instr_renamed_temp == max_instr_bw_checkpoints)){
+      else if ((is_branch_mispr == true) || (instr_renamed_temp == max_instr_bw_checkpoints - 1)){
         /*
         printf("simulate placing checkpoint: is_branch_mispredict: %d, instr_ren == max: %d\n",
             is_branch_mispr, instr_renamed_temp == max_instr_bw_checkpoints
@@ -208,6 +208,7 @@ void pipeline_t::rename2() {
       store = IS_STORE(PAY.buf[index].flags);
       branch = IS_BRANCH(PAY.buf[index].flags);
 
+
       if (IS_AMO(PAY.buf[index].flags) || IS_CSR(PAY.buf[index].flags)){
             if (instr_renamed_since_last_checkpoint != 0){
                 REN->checkpoint();
@@ -228,7 +229,7 @@ void pipeline_t::rename2() {
         place_checkpoint_after = false;
       }
 
-      else if ((is_branch_mispr == true) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints)){
+      else if ((is_branch_mispr == true) || (instr_renamed_since_last_checkpoint == max_instr_bw_checkpoints-1)){
         place_checkpoint_after = true;
         chkpt_ID = REN->get_checkpoint_ID(load, store, branch, amo, csr);
         //if (is_branch_mispr) printf("\n========\nTHERE GOES A BRANCH MISPREDICT, chkpt_id: %d\n", chkpt_ID);
