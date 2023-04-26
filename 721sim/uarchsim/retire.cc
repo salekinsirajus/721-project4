@@ -190,7 +190,8 @@ void pipeline_t::retire(size_t& instret, size_t instret_limit) {
 
              if (RETSTATE.amo || RETSTATE.csr) {   // Resume the stalled fetch unit after committing a serializing instruction.
                 //TODO: double check if the sanity check is good enough
-                printf("The sanity check: %d\n", IS_AMO(RETSTATE.amo) || IS_CSR(RETSTATE.csr));
+
+                //printf("The sanity check: %d\n", IS_AMO(RETSTATE.amo) || IS_CSR(RETSTATE.csr));
                 //FIXME: PUT BACK THE SANITY CHECK ONCE DONE EXPERIMENTING
                 //assert((IS_AMO(RETSTATE.amo) || IS_CSR(RETSTATE.csr)));
 
