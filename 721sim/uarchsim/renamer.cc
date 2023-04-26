@@ -580,13 +580,6 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]);
             }
         }
-
-    /*
-        //actually squash the checkpoint
-        if ((squash_these_checkpoints_for_rollback[j] == 1) && (j != rollback_chkpt)){
-            this->reset_checkpoint(j);
-        }
-    */
     }
 
 
@@ -688,6 +681,15 @@ bool renamer::is_chkpt_valid(uint64_t chkpt_id){
 void renamer::squash(){
     //the renamer should be rolled back to the committed state of the machine
     //printf("renamer::squash() initiating a complete squash\n");
+    uint64_t total_loads, total_stores, total_branches;
+    //FIXME: this seems like a ghetto solution but lets see
+
+    this->rollback(this->chkpt_buffer_head,
+                   false, total_loads,
+                   total_stores, total_branches
+    );
+    return;
+
 
     //restore the RMT
     uint64_t i;
@@ -730,11 +732,20 @@ void renamer::squash(){
            for (int k=0; k < map_table_size; k++){
                 dec_usage_counter(checkpoint_buffer[j].rmt[k]); 
             } 
+           reset_checkpoint(j);
         }
     }
 
-    //printf("renamer::squash() DONE a complete squash\n");
-    assert_checkpoint_buffer_invariance();
+    //set new tail, right after the head
+    chkpt_buffer_tail = chkpt_buffer_head + 1;
+    chkpt_buffer_tail_phase = chkpt_buffer_head_phase;
+    if (chkpt_buffer_tail == num_checkpoints){
+        //set it to 0
+        chkpt_buffer_tail = 0;
+        chkpt_buffer_tail_phase = !chkpt_buffer_tail_phase;
+    }
+
+    reset_checkpoint(chkpt_buffer_tail);
 
     return;
 }
