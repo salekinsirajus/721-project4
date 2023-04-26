@@ -12,8 +12,10 @@ endif ()
 set(AC_CONFIGURE_PREFIX .)
 
 add_compile_options(-Wno-sign-compare)
-set(CMAKE_CXX_FLAGS_RELO3 "-O3 -g")
-set(CMAKE_C_FLAGS_RELO3 "-O3 -g")
+#set(CMAKE_CXX_FLAGS_RELO3 "-O3 -g")
+#set(CMAKE_C_FLAGS_RELO3 "-O3 -g")
+set(CMAKE_CXX_FLAGS_RELO3 "-g")
+set(CMAKE_C_FLAGS_RELO3 "-g")
 
 add_subdirectory(riscv-base)
 add_subdirectory(uarchsim)

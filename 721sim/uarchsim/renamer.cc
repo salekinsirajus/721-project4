@@ -235,7 +235,21 @@ bool renamer::free_list_is_empty(){
 
 bool renamer::free_list_is_full(){
     if ((this->fl.head == this->fl.tail) && 
-        (this->fl.head_phase != this->fl.tail_phase)) return true;
+        (this->fl.head_phase != this->fl.tail_phase)){
+        //printf("free list is FULL!\n");
+
+        //checking if none of them in the RMT
+        //print_rmt();
+        /*
+        for (uint64_t i=0; i < free_list_size; i++){
+            if (reg_in_rmt(fl.list[i])){
+                printf("%d is in free list AND in RMT\n", fl.list[i]);
+            }
+        }
+        */
+
+        return true;
+    }
 
     return false;
 }
@@ -527,10 +541,18 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
 
     //restore the unmapped bits from the rollback checkpoint
-    uint64_t unmapped_bit;
+    uint64_t checkpointed_bit, current_bit;
     for (uint64_t j=0; j < num_phys_reg; j++){
-        prf_unmapped[j] = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
-       
+        checkpointed_bit = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
+        current_bit = prf_unmapped[j];
+        if (current_bit != checkpointed_bit){
+            if ((current_bit == 0) && (checkpointed_bit == 1)){
+                unmap(j);
+            } 
+            else if ((current_bit == 1) && (checkpointed_bit == 0)){
+                map(j);
+            }
+        }
     }
 
     //generate squash mask
