@@ -694,14 +694,19 @@ void renamer::squash(){
         rmt[i] = checkpoint_buffer[chkpt_buffer_head].rmt[i];
     }
 
-    //restore unmapped bit from the oldest checkpoint
-    uint64_t unmapped_bit;
-    for (i = 0; i < num_phys_reg; i++){
-        unmapped_bit = checkpoint_buffer[chkpt_buffer_head].unmapped_bits[i];
-        //free list restoring via aggressive register reclamation
-        if (unmapped_bit == 1) this->unmap(i);
-        else this->map(i);
-        prf_unmapped[i] = unmapped_bit;
+    //restore the unmapped bits from the rollback checkpoint
+    uint64_t checkpointed_bit, current_bit;
+    for (uint64_t j=0; j < num_phys_reg; j++){
+        checkpointed_bit = checkpoint_buffer[chkpt_buffer_head].unmapped_bits[j];
+        current_bit = prf_unmapped[j];
+        if (current_bit != checkpointed_bit){
+            if ((current_bit == 0) && (checkpointed_bit == 1)){
+                unmap(j);
+            } 
+            else if ((current_bit == 1) && (checkpointed_bit == 0)){
+                map(j);
+            }
+        }
     }
 
     //reinitialize free list    
