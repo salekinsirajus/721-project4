@@ -488,7 +488,7 @@ bool renamer::precommit(uint64_t &chkpt_id,
 
 
     if ((this->checkpoint_buffer[chkpt_id].uncompleted_instruction_counter == 0) &&
-        (((this->num_checkpoints - this->get_free_checkpoint_count()) > 1 )|| 
+        ((this->is_chkpt_valid((this->chkpt_buffer_head + 1) % this->num_checkpoints))|| 
           (this->checkpoint_buffer[chkpt_id].exception)
         )
        ){
