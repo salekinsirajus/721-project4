@@ -620,7 +620,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
         }
     }
 
-
+    reset_checkpoint(rollback_chkpt);
 
     //set the tail right after the rollback checkpoint 
     uint64_t new_tail = (rollback_chkpt + 1) % this->num_checkpoints;
