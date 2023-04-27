@@ -137,7 +137,7 @@ bool renamer::checkpoint_buffer_is_full(){
 
 uint64_t renamer::get_free_checkpoint_count(){
     if (checkpoint_buffer_is_full()) return 0;
-    if (checkpoint_buffer_is_empty()) return num_checkpoints;
+    if (checkpoint_buffer_is_empty()) return this->num_checkpoints;
      
     int used, free;
     if (this->chkpt_buffer_head_phase == this->chkpt_buffer_tail_phase){
@@ -171,14 +171,18 @@ void renamer::reset_checkpoint(uint64_t i){
 }
 
 void renamer::free_checkpoint(){
-    //clean out all the counters and flags
-    reset_checkpoint(chkpt_buffer_head);
-    //now move the head ahead
-    chkpt_buffer_head++;
+    //make sure there is at least one more checkpoint after the head
+    assert((this->num_checkpoints - this->get_free_checkpoint_count())> 1);
 
-    if (chkpt_buffer_head == num_checkpoints){
-        chkpt_buffer_head = 0;
-        chkpt_buffer_head_phase = !chkpt_buffer_head_phase;
+    reset_checkpoint(this->chkpt_buffer_head);
+    //now move the head ahead
+    printf("release:    %d\n", this->chkpt_buffer_head);
+
+    this->chkpt_buffer_head++;
+
+    if (this->chkpt_buffer_head == this->num_checkpoints){
+        this->chkpt_buffer_head = 0;
+        this->chkpt_buffer_head_phase = !this->chkpt_buffer_head_phase;
     }
 
     assert_checkpoint_buffer_invariance();
@@ -186,7 +190,7 @@ void renamer::free_checkpoint(){
 
 bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
     //Get the number of available checkpoints
-    if (bundle_chkpt > get_free_checkpoint_count()){
+    if (bundle_chkpt > this->get_free_checkpoint_count()){
         return true;
     }
 
@@ -194,29 +198,29 @@ bool renamer::stall_checkpoint(uint64_t bundle_chkpt){
 }
 
 void renamer::set_exception(uint64_t checkpoint_ID){
-    checkpoint_buffer[checkpoint_ID].exception = true;
+    this->checkpoint_buffer[checkpoint_ID].exception = true;
 }
 
 uint64_t renamer::get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr){
     //return the nearest prior checkpoint
     uint64_t checkpoint_ID;
-    if (chkpt_buffer_tail == 0){
-        checkpoint_ID = num_checkpoints - 1;
+    if (this->chkpt_buffer_tail == 0){
+        checkpoint_ID = this->num_checkpoints - 1;
     } else {
-        checkpoint_ID = chkpt_buffer_tail - 1;
+        checkpoint_ID = this->chkpt_buffer_tail - 1;
     }
 
     //increament other counters, set the flags etc
-    if (load == true){checkpoint_buffer[checkpoint_ID].load_counter++;}
-    if (store == true){checkpoint_buffer[checkpoint_ID].store_counter++;}
-    if (branch == true){checkpoint_buffer[checkpoint_ID].branch_counter++;}
+    if (load == true){this->checkpoint_buffer[checkpoint_ID].load_counter++;}
+    if (store == true){this->checkpoint_buffer[checkpoint_ID].store_counter++;}
+    if (branch == true){this->checkpoint_buffer[checkpoint_ID].branch_counter++;}
 
     
-    checkpoint_buffer[checkpoint_ID].amo = amo;
-    checkpoint_buffer[checkpoint_ID].csr = csr;
+    this->checkpoint_buffer[checkpoint_ID].amo = amo;
+    this->checkpoint_buffer[checkpoint_ID].csr = csr;
 
     //unconditionally increamenting
-    checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter++;
+    this->checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter++;
 
     return checkpoint_ID;
 }
@@ -355,7 +359,7 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
    
     assert(old != this->rmt[log_reg]);
     this->map(result);
-    inc_usage_counter(result);
+    this->inc_usage_counter(result);
 
     this->unmap(old);
 
@@ -364,48 +368,50 @@ uint64_t renamer::rename_rdst(uint64_t log_reg){
 
 
 void renamer::checkpoint(){
-    uint64_t x = chkpt_buffer_tail;
+    assert(!this->checkpoint_buffer_is_full());
+    uint64_t x = this->chkpt_buffer_tail;
     uint64_t i;
     for(i = 0; i < map_table_size; i++){
-        checkpoint_buffer[x].rmt[i] = rmt[i];
+        this->checkpoint_buffer[x].rmt[i] = rmt[i];
         inc_usage_counter(rmt[i]);
     }
 
-    checkpoint_buffer[x].uncompleted_instruction_counter = 0;
-    checkpoint_buffer[x].load_counter = 0;
-    checkpoint_buffer[x].store_counter = 0;
-    checkpoint_buffer[x].branch_counter = 0;
-    checkpoint_buffer[x].amo = false;
-    checkpoint_buffer[x].csr = false;
-    checkpoint_buffer[x].exception = false;
+    this->checkpoint_buffer[x].uncompleted_instruction_counter = 0;
+    this->checkpoint_buffer[x].load_counter = 0;
+    this->checkpoint_buffer[x].store_counter = 0;
+    this->checkpoint_buffer[x].branch_counter = 0;
+    this->checkpoint_buffer[x].amo = false;
+    this->checkpoint_buffer[x].csr = false;
+    this->checkpoint_buffer[x].exception = false;
 
     uint64_t j;
     for (j=0; j < num_phys_reg; j++){
-        checkpoint_buffer[x].unmapped_bits[j] = prf_unmapped[j];
+        this->checkpoint_buffer[x].unmapped_bits[j] = prf_unmapped[j];
     }
 
+    printf("checkpoint: %d\n", x);
 
     //advancing the tail 
-    chkpt_buffer_tail++;
-    if (chkpt_buffer_tail == num_checkpoints){
-        chkpt_buffer_tail = 0;
-        chkpt_buffer_tail_phase = !chkpt_buffer_tail_phase;
+    this->chkpt_buffer_tail++;
+    if (this->chkpt_buffer_tail == this->num_checkpoints){
+        this->chkpt_buffer_tail = 0;
+        this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
     }
 }
 
 void renamer::map(uint64_t phys_reg){
     // Clear the unmapped bit of physical register
-    prf_unmapped[phys_reg] = 0;
+    this->prf_unmapped[phys_reg] = 0;
 }
 
 void renamer::unmap(uint64_t phys_reg){
     // Set the unmapped bit of physical register
     // Check if phys_reg’s usage counter is 0; if so,
     // push phys_reg onto the Free List.
-    prf_unmapped[phys_reg] = 1;
+    this->prf_unmapped[phys_reg] = 1;
     if ((this->prf_unmapped[phys_reg] == 1) && (this->prf_usage_counter[phys_reg] == 0)){
         //push it onto the free list:
-        bool result = push_free_list(phys_reg);
+        bool result = this->push_free_list(phys_reg);
         if (!result){
             printf("Could not push to free list since it's full\n");
             assert(0);
@@ -454,8 +460,9 @@ void renamer::write(uint64_t phys_reg, uint64_t value){
 void renamer::set_complete(uint64_t checkpoint_ID){
     //TODO: reimplement for CPR
     //printf("instruction for chkpt_id %d has completed\n", checkpoint_ID);
-    checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter--;
-    if (checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter < 0){
+    assert(this->checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter > 0);
+    this->checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter--;
+    if (this->checkpoint_buffer[checkpoint_ID].uncompleted_instruction_counter < 0){
         printf("uncompleted IC went below 0. Should not happen\n");
         exit(EXIT_FAILURE);
     }
@@ -469,20 +476,20 @@ bool renamer::precommit(uint64_t &chkpt_id,
                         bool &amo, bool &csr, bool &exception
                         ){
 
-    chkpt_id = chkpt_buffer_head;
+    chkpt_id = this->chkpt_buffer_head;
 
-    num_loads = checkpoint_buffer[chkpt_id].load_counter;
-    num_stores = checkpoint_buffer[chkpt_id].store_counter;
-    num_branches = checkpoint_buffer[chkpt_id].branch_counter;
+    num_loads = this->checkpoint_buffer[chkpt_id].load_counter;
+    num_stores = this->checkpoint_buffer[chkpt_id].store_counter;
+    num_branches = this->checkpoint_buffer[chkpt_id].branch_counter;
 
-    amo = checkpoint_buffer[chkpt_id].amo;
-    csr = checkpoint_buffer[chkpt_id].csr;
-    exception = checkpoint_buffer[chkpt_id].exception;
+    amo = this->checkpoint_buffer[chkpt_id].amo;
+    csr = this->checkpoint_buffer[chkpt_id].csr;
+    exception = this->checkpoint_buffer[chkpt_id].exception;
 
 
-    if ((checkpoint_buffer[chkpt_id].uncompleted_instruction_counter == 0) &&
-        (((num_checkpoints - get_free_checkpoint_count()) > 1 )|| 
-          (checkpoint_buffer[chkpt_id].exception)
+    if ((this->checkpoint_buffer[chkpt_id].uncompleted_instruction_counter == 0) &&
+        (((this->num_checkpoints - this->get_free_checkpoint_count()) > 1 )|| 
+          (this->checkpoint_buffer[chkpt_id].exception)
         )
        ){
         return true;
@@ -493,16 +500,16 @@ bool renamer::precommit(uint64_t &chkpt_id,
 
 void renamer::commit(uint64_t log_reg){
     //NOTE: double-check which RMT to use, might be a source of error
-    uint64_t phys_reg = checkpoint_buffer[chkpt_buffer_head].rmt[log_reg];
+    uint64_t phys_reg = this->checkpoint_buffer[this->chkpt_buffer_head].rmt[log_reg];
     this->dec_usage_counter(phys_reg);
 }
 
 void renamer::generate_squash_mask_array(uint64_t *array, uint64_t rc){
     uint64_t i = rc;
-    while (i != chkpt_buffer_tail){
+    while (i != this->chkpt_buffer_tail){
         array[i] = 1; 
-        i = (i+1) % num_checkpoints;
-        if (i == chkpt_buffer_tail) break;
+        i = (i+1) % this->num_checkpoints;
+        if (i == this->chkpt_buffer_tail) break;
     }
 
     array[rc] = 0;
@@ -512,6 +519,28 @@ void renamer::generate_squash_mask_array(uint64_t *array, uint64_t rc){
 uint64_t renamer::generate_squash_mask(uint64_t rc){
     uint64_t i = rc;
     uint64_t mask = 0;
+
+    while (i != this->chkpt_buffer_tail){
+        mask += pow(2, i);
+        i = (i+1) % this->num_checkpoints;
+        if (i == this->chkpt_buffer_tail) break;
+    }
+
+    printf("rc: %d, head: %d(%d), tail: %d(%d), num: %d\n", 
+        rc, chkpt_buffer_head, chkpt_buffer_head_phase,
+        chkpt_buffer_tail, chkpt_buffer_tail_phase,
+        num_checkpoints
+    );
+    std::cout<<std::bitset<8>(mask)<<std::endl;
+    
+    return mask;
+}
+
+/*
+uint64_t renamer::generate_squash_mask(uint64_t rc){
+    uint64_t i = rc;
+    uint64_t mask = 0;
+
     while (i != chkpt_buffer_tail){
         mask += pow(2, i);
         i = (i+1) % num_checkpoints;
@@ -520,6 +549,7 @@ uint64_t renamer::generate_squash_mask(uint64_t rc){
 
     return mask;
 }
+*/
 
 uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
                            uint64_t &total_loads, uint64_t &total_stores, 
@@ -538,29 +568,31 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     //restore the RMT from the rollback checkpoint
     for (uint64_t i=0; i < map_table_size; i++){
-        rmt[i] = checkpoint_buffer[rollback_chkpt].rmt[i];
+        this->rmt[i] = this->checkpoint_buffer[rollback_chkpt].rmt[i];
     }
 
     //restore the unmapped bits from the rollback checkpoint
     uint64_t checkpointed_bit, current_bit;
-    for (uint64_t j=0; j < num_phys_reg; j++){
-        checkpointed_bit = checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
-        current_bit = prf_unmapped[j];
+    for (uint64_t j=0; j < this->num_phys_reg; j++){
+        checkpointed_bit = this->checkpoint_buffer[rollback_chkpt].unmapped_bits[j];
+        current_bit = this->prf_unmapped[j];
         if (current_bit != checkpointed_bit){
             if ((current_bit == 0) && (checkpointed_bit == 1)){
-                unmap(j);
+                this->unmap(j);
             } 
             else if ((current_bit == 1) && (checkpointed_bit == 0)){
-                map(j);
+                this->map(j);
             }
         }
     }
 
     //generate squash mask
+    if (next){printf("rollback\n");}
+    else{printf("squash\n");}
     squash_mask = generate_squash_mask(rollback_chkpt);
 
     uint64_t *squash_these_checkpoints_for_rollback;
-    squash_these_checkpoints_for_rollback = new uint64_t[num_checkpoints];
+    squash_these_checkpoints_for_rollback = new uint64_t[this->num_checkpoints];
 
 
     for (uint64_t j=0; j < num_checkpoints; j++){
@@ -573,101 +605,90 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     total_stores = 0;
     total_branches = 0;
 
-    for (uint64_t j=0; j < num_checkpoints; j++){
+    for (uint64_t j=0; j < this->num_checkpoints; j++){
         if (squash_these_checkpoints_for_rollback[j] == 1){
-            assert(is_chkpt_valid(j));
-            for (uint64_t k=0; k < map_table_size; k++){
-                dec_usage_counter(checkpoint_buffer[j].rmt[k]);
+            assert(this->is_chkpt_valid(j));
+            for (uint64_t k=0; k < this->map_table_size; k++){
+                dec_usage_counter(this->checkpoint_buffer[j].rmt[k]);
             }
         }
     }
 
 
     //reset the rollback checkpoint
-    checkpoint_buffer[rollback_chkpt].load_counter = 0; 
-    checkpoint_buffer[rollback_chkpt].store_counter = 0; 
-    checkpoint_buffer[rollback_chkpt].branch_counter = 0; 
-    checkpoint_buffer[rollback_chkpt].uncompleted_instruction_counter = 0; 
-    checkpoint_buffer[rollback_chkpt].amo = false; 
-    checkpoint_buffer[rollback_chkpt].csr = false; 
-    checkpoint_buffer[rollback_chkpt].exception = false; 
+    this->checkpoint_buffer[rollback_chkpt].load_counter = 0; 
+    this->checkpoint_buffer[rollback_chkpt].store_counter = 0; 
+    this->checkpoint_buffer[rollback_chkpt].branch_counter = 0; 
+    this->checkpoint_buffer[rollback_chkpt].uncompleted_instruction_counter = 0; 
+    this->checkpoint_buffer[rollback_chkpt].amo = false; 
+    this->checkpoint_buffer[rollback_chkpt].csr = false; 
+    this->checkpoint_buffer[rollback_chkpt].exception = false; 
 
     //set the tail right after the rollback checkpoint 
-    uint64_t new_tail = (rollback_chkpt + 1) % num_checkpoints;
+    uint64_t new_tail = (rollback_chkpt + 1) % this->num_checkpoints;
 
     while (this->chkpt_buffer_tail != new_tail){
         //printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
-        chkpt_buffer_tail = (chkpt_buffer_tail - 1) % num_checkpoints; 
+        this->chkpt_buffer_tail = (this->chkpt_buffer_tail - 1) % this->num_checkpoints; 
        
         //reset the checkpoint that will be squashed
-        checkpoint_buffer[chkpt_buffer_tail].load_counter = 0; 
-        checkpoint_buffer[chkpt_buffer_tail].store_counter = 0; 
-        checkpoint_buffer[chkpt_buffer_tail].branch_counter = 0; 
-        checkpoint_buffer[chkpt_buffer_tail].uncompleted_instruction_counter = 0; 
-        checkpoint_buffer[chkpt_buffer_tail].amo = false; 
-        checkpoint_buffer[chkpt_buffer_tail].csr = false; 
-        checkpoint_buffer[chkpt_buffer_tail].exception = false; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].load_counter = 0; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].store_counter = 0; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].branch_counter = 0; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].uncompleted_instruction_counter = 0; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].amo = false; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].csr = false; 
+        this->checkpoint_buffer[this->chkpt_buffer_tail].exception = false; 
 
         if (this->chkpt_buffer_tail == (num_checkpoints - 1)){
             this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
         }
 
-        if (chkpt_buffer_tail == new_tail) break;
+        if (this->chkpt_buffer_tail == new_tail) break;
     }
 
 
-    reset_checkpoint(chkpt_buffer_tail); //make sure it is empty
+    reset_checkpoint(this->chkpt_buffer_tail); //make sure it is empty
     assert_checkpoint_buffer_invariance();
 
     return squash_mask;
 }
 
 void renamer::assert_checkpoint_buffer_invariance(){
-    //making sure checkpoint buffer is in a consisent state
-    //after any operation
-    //FIXME DISABLING FOR THE MOMENT
-
-    //printf("renamer::checkpoint_bueffre_invariance ");
-    //printf("chkpt buffer - head: %d, tail: %d, head_phase: %d, tail_phase: %d\n",
-    //    chkpt_buffer_head, chkpt_buffer_tail, chkpt_buffer_head_phase, chkpt_buffer_tail_phase
-    //);
-    if (checkpoint_buffer_is_full()){
+    if (this->checkpoint_buffer_is_full()){
         //it can be full. head == tail and hp != tp
         return;
     }
 
-    if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
-        assert(chkpt_buffer_tail > chkpt_buffer_head);
+    if (this->chkpt_buffer_tail_phase == this->chkpt_buffer_head_phase){
+        assert(this->chkpt_buffer_tail > this->chkpt_buffer_head);
     }
     else {
-        assert(chkpt_buffer_tail < chkpt_buffer_head);
+        assert(this->chkpt_buffer_tail < this->chkpt_buffer_head);
     }
 
 }
 
 
 bool renamer::is_chkpt_valid(uint64_t chkpt_id){
-    //printf("is_chkpt_valid()\nhead: %d, tail: %d, hp: %d, tp: %d, chkpt_id: %d\n", chkpt_buffer_head, chkpt_buffer_tail, 
-    //    chkpt_buffer_head_phase, chkpt_buffer_tail_phase, chkpt_id);
-    /* return true for all the valid checkpoints, INCLUDING the head*/
-    if (checkpoint_buffer_is_full()){
+    if (this->checkpoint_buffer_is_full()){
         return true;
     }
-    if (checkpoint_buffer_is_empty()){
+    if (this->checkpoint_buffer_is_empty()){
         return false;
     }
 
-    if (chkpt_buffer_tail_phase == chkpt_buffer_head_phase){
-        assert(chkpt_buffer_tail > chkpt_buffer_head);
-        if ((chkpt_id >= chkpt_buffer_head) && (chkpt_buffer_tail > chkpt_id)){
+    if (this->chkpt_buffer_tail_phase == this->chkpt_buffer_head_phase){
+        assert(this->chkpt_buffer_tail > this->chkpt_buffer_head);
+        if ((chkpt_id >= this->chkpt_buffer_head) && (this->chkpt_buffer_tail > chkpt_id)){
             return true;
         } else {
             return false;    
         }
     }
     else {
-        assert(chkpt_buffer_tail < chkpt_buffer_head);
-        if ((chkpt_id >= chkpt_buffer_head) || (chkpt_buffer_tail > chkpt_id)){
+        assert(this->chkpt_buffer_tail < this->chkpt_buffer_head);
+        if ((chkpt_id >= this->chkpt_buffer_head) || (this->chkpt_buffer_tail > chkpt_id)){
             return true; 
         } else {
             return false;
@@ -690,7 +711,7 @@ void renamer::squash(){
     );
     return;
 
-
+    /*
     //restore the RMT
     uint64_t i;
     for (i = 0; i < map_table_size; i++){
@@ -748,6 +769,7 @@ void renamer::squash(){
     reset_checkpoint(chkpt_buffer_tail);
 
     return;
+    */
 }
 
 
@@ -885,7 +907,6 @@ bool renamer::in_free_list(uint64_t phys_reg){
 bool renamer::reg_in_rmt(uint64_t phys_reg){
     uint64_t i;
     for (i=0; i < this->map_table_size; i++){
-    uint64_t get_unmapped_count();
         if (this->rmt[i] == phys_reg) return true;    
     }
     return false;
