@@ -636,12 +636,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
         if (this->chkpt_buffer_tail == new_tail) break;
     }
     
-    if (next == true){//rollback only
-        assert(rollback_chkpt != this->chkpt_buffer_head);
-        reset_checkpoint(rollback_chkpt);
-    }
-
-    if (this->chkpt_buffer_head != this->chkpt_buffer_head){
+    if (this->chkpt_buffer_head != this->chkpt_buffer_tail){
         reset_checkpoint(this->chkpt_buffer_tail); //make sure it is empty
     }
 
@@ -703,6 +698,9 @@ void renamer::squash(){
                    false, total_loads,
                    total_stores, total_branches
     );
+
+    this->reset_checkpoint(chkpt_buffer_head);
+    this->reset_checkpoint(chkpt_buffer_tail);
     return;
 
     /*
