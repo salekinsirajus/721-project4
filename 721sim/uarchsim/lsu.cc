@@ -348,7 +348,7 @@ void lsu::store_addr(cycle_t cycle,
    //TODO/FIXME: Probably will need for CPR phase 2
 
    if (SPEC_DISAMBIG) {
-      printf("SPEC_DISAMBIG: load violation.\n");
+
     /*
       unsigned int load_entry;
       unsigned int al_index;
@@ -495,7 +495,7 @@ void lsu::execute_load(cycle_t cycle,
            uint64_t load_chkpt_id = proc->PAY.buf[LQ[lq_index].pay_index].checkpoint_ID;
            uint64_t store_chkpt_id = proc->PAY.buf[SQ[store_entry].pay_index].checkpoint_ID;
       if (load_chkpt_id == store_chkpt_id) {
-         printf("lsu patch: load_chkpt_id and store_chkpt_id are the same\n");
+        // printf("lsu patch: load_chkpt_id and store_chkpt_id are the same\n");
          // The conflicting store and load of different sizes are in the same checkpoint interval.
          // Don't stall the load, otherwise CPR will deadlock.
          // This should be rare, so rather than model the complexity of partial store-load forwarding,
@@ -504,11 +504,11 @@ void lsu::execute_load(cycle_t cycle,
          if (proc->PAY.buf[LQ[lq_index].pay_index].good_instruction) {
                  db_t *actual = proc->get_pipe()->peek(proc->PAY.buf[LQ[lq_index].pay_index].db_index);
             LQ[lq_index].value = actual->a_rdst[0].value;
-            printf("first if: cheating with functional simulator\n");
+         //   printf("first if: cheating with functional simulator\n");
          }
          else {
         // Load will in any case get squashed (incorrect control-flow path), so use a sentinel value.
-            printf("else: setting DEADBEEF since it will get squashed anyway??\n");
+            //printf("else: setting DEADBEEF since it will get squashed anyway??\n");
             LQ[lq_index].value = 0xDEADBEEF;
          }
          // The load value is now available.
@@ -521,7 +521,7 @@ void lsu::execute_load(cycle_t cycle,
          // The conflicting store and load of different sizes are in different checkpoint intervals.
          // Stalling the load will not cause CPR to deadlock.
          // STATS
-         printf("The conflicting store and load of different sizes are in different checkpoint intervals\n");
+        // printf("The conflicting store and load of different sizes are in different checkpoint intervals\n");
          LQ[lq_index].stat_load_stall_disambig = true;
       }
    }

@@ -176,7 +176,7 @@ void renamer::free_checkpoint(){
 
     reset_checkpoint(this->chkpt_buffer_head);
     //now move the head ahead
-    printf("release:    %d\n", this->chkpt_buffer_head);
+    //printf("release:    %d\n", this->chkpt_buffer_head);
 
     this->chkpt_buffer_head++;
 
@@ -389,7 +389,7 @@ void renamer::checkpoint(){
         this->checkpoint_buffer[x].unmapped_bits[j] = prf_unmapped[j];
     }
 
-    printf("checkpoint: %d\n", x);
+    //printf("checkpoint: %d\n", x);
 
     //advancing the tail 
     this->chkpt_buffer_tail++;
@@ -526,12 +526,14 @@ uint64_t renamer::generate_squash_mask(uint64_t rc){
         if (i == this->chkpt_buffer_tail) break;
     }
 
+    /*
     printf("rc: %d, head: %d(%d), tail: %d(%d), num: %d\n", 
         rc, chkpt_buffer_head, chkpt_buffer_head_phase,
         chkpt_buffer_tail, chkpt_buffer_tail_phase,
         num_checkpoints
     );
     std::cout<<std::bitset<8>(mask)<<std::endl;
+    */
     
     return mask;
 }
@@ -562,6 +564,7 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
     else {
         rollback_chkpt = (chkpt_id + 1) % num_checkpoints; 
+        //assert(this->checkpoint_buffer[this->chkpt_buffer_head].uncompleted_instruction_counter > 0);
     }
 
     assert(is_chkpt_valid(rollback_chkpt));
@@ -587,8 +590,10 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
 
     //generate squash mask
+    /*
     if (next){printf("rollback\n");}
     else{printf("squash\n");}
+    */
     squash_mask = generate_squash_mask(rollback_chkpt);
 
     uint64_t *squash_these_checkpoints_for_rollback;
@@ -601,10 +606,11 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
     generate_squash_mask_array(squash_these_checkpoints_for_rollback, rollback_chkpt);
 
+/*
     total_loads = 0;
     total_stores = 0;
     total_branches = 0;
-
+*/
     for (uint64_t j=0; j < this->num_checkpoints; j++){
         if (squash_these_checkpoints_for_rollback[j] == 1){
             assert(this->is_chkpt_valid(j));
@@ -615,14 +621,6 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     }
 
 
-    //reset the rollback checkpoint
-    this->checkpoint_buffer[rollback_chkpt].load_counter = 0; 
-    this->checkpoint_buffer[rollback_chkpt].store_counter = 0; 
-    this->checkpoint_buffer[rollback_chkpt].branch_counter = 0; 
-    this->checkpoint_buffer[rollback_chkpt].uncompleted_instruction_counter = 0; 
-    this->checkpoint_buffer[rollback_chkpt].amo = false; 
-    this->checkpoint_buffer[rollback_chkpt].csr = false; 
-    this->checkpoint_buffer[rollback_chkpt].exception = false; 
 
     //set the tail right after the rollback checkpoint 
     uint64_t new_tail = (rollback_chkpt + 1) % this->num_checkpoints;
@@ -630,15 +628,6 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
     while (this->chkpt_buffer_tail != new_tail){
         //printf("tail afer decreamenting: %d\n", this->chkpt_buffer_tail);
         this->chkpt_buffer_tail = (this->chkpt_buffer_tail - 1) % this->num_checkpoints; 
-       
-        //reset the checkpoint that will be squashed
-        this->checkpoint_buffer[this->chkpt_buffer_tail].load_counter = 0; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].store_counter = 0; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].branch_counter = 0; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].uncompleted_instruction_counter = 0; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].amo = false; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].csr = false; 
-        this->checkpoint_buffer[this->chkpt_buffer_tail].exception = false; 
 
         if (this->chkpt_buffer_tail == (num_checkpoints - 1)){
             this->chkpt_buffer_tail_phase = !this->chkpt_buffer_tail_phase;
@@ -646,10 +635,15 @@ uint64_t renamer::rollback(uint64_t chkpt_id, bool next,
 
         if (this->chkpt_buffer_tail == new_tail) break;
     }
+    
+    if (next == true){//rollback only
+        assert(rollback_chkpt != this->chkpt_buffer_head);
+        reset_checkpoint(rollback_chkpt);
+    }
 
-
-    reset_checkpoint(this->chkpt_buffer_tail); //make sure it is empty
-    assert_checkpoint_buffer_invariance();
+    if (this->chkpt_buffer_head != this->chkpt_buffer_head){
+        reset_checkpoint(this->chkpt_buffer_tail); //make sure it is empty
+    }
 
     return squash_mask;
 }
