@@ -136,6 +136,9 @@ void fetchunit_t::transfer_fetch_bundle() {
       PAY->buf[index].branch_type = fetch_bundle[pos].branch_type;
       PAY->buf[index].branch_target = fetch_bundle[pos].branch_target;
       PAY->buf[index].fflags = 0; // fflags field is always cleaned for newly fetched instructions
+      // CPR: Initialize chkpt_id to something greater than the largest valid chkpt_id.
+      PAY->buf[index].checkpoint_ID = 0xDEADBEEF;
+
 
       // Clear the trap storage before the first time it is used.
       PAY->buf[index].trap.clear();
@@ -628,14 +631,14 @@ void fetchunit_t::mispredict(uint64_t branch_pred_tag, bool taken, uint64_t next
 
 // Commit the indicated branch from the branch queue.
 // We assert that it is at the head.
-void fetchunit_t::commit(uint64_t branch_pred_tag) {
+void fetchunit_t::commit() {
    // Pop the branch queue. It returns the pred_tag/pred_tag_phase of the head entry prior to popping it.
    uint64_t pred_tag;
    bool pred_tag_phase;
    bq.pop(pred_tag, pred_tag_phase);
 
    // Assert that the branch_pred_tag (pred_tag of the branch being committed from the pipeline) corresponds to the popped branch queue entry.
-   assert(branch_pred_tag == ((pred_tag << 1) | (pred_tag_phase ? 1 : 0)));
+   //assert(branch_pred_tag == ((pred_tag << 1) | (pred_tag_phase ? 1 : 0)));
 
    // Update the conditional branch predictor or indirect branch predictor.
    // Update measurements.

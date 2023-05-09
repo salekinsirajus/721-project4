@@ -96,7 +96,7 @@ void pipeline_t::register_read(unsigned int lane_number) {
       // Copy instruction to Execute Stage.
       Execution_Lanes[lane_number].ex[0].valid = true;
       Execution_Lanes[lane_number].ex[0].index = Execution_Lanes[lane_number].rr.index;
-      Execution_Lanes[lane_number].ex[0].branch_mask = Execution_Lanes[lane_number].rr.branch_mask;
+      Execution_Lanes[lane_number].ex[0].checkpoint_ID = Execution_Lanes[lane_number].rr.checkpoint_ID;
 
       // Remove instruction from Register Read Stage.
       Execution_Lanes[lane_number].rr.valid = false;

@@ -46,6 +46,8 @@ typedef struct {
   bool stat_forward;    // Load received value from store in LSQ.
   bool stat_load_violation;	// A load executed before an older conflicting store.
   bool stat_late_store_match;	// A stalled load observed an address match with a late-arriving older store.
+  bool stat_cpr_deadlock_kluge;    // Count how often there was a conflicting store and load, of different sizes, in the same checkpoint interval.
+
 } lsq_entry;
 
 
@@ -125,6 +127,9 @@ private:
   unsigned int n_true_stall;
   unsigned int n_false_stall;
   unsigned int n_load_violation;
+  // Count how often there was a conflicting store and load, of different sizes, in the same checkpoint interval.
+  unsigned int n_cpr_deadlock_kluge;
+
 
   //////////////////////////
   //  Private functions
@@ -143,7 +148,8 @@ private:
   bool disambiguate(unsigned int lq_index,
                     unsigned int sq_index, bool sq_index_phase,
                     bool& forward,
-                    unsigned int& store_entry);
+                    unsigned int& store_entry,
+           bool& partial);
 
   // The load execution datapath.
   void execute_load(cycle_t cycle,

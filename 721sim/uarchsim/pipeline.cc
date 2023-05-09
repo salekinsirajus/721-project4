@@ -93,6 +93,19 @@ pipeline_t::pipeline_t(
   num_insn = 0;
   num_insn_split = 0;
 
+  //cpr related stuff
+  max_instr_bw_checkpoints = rob_size / num_chkpts;
+  instr_renamed_since_last_checkpoint = 0; //this will be changed somewhere else later
+  renamer_stalled_cycles_count = 0;
+  RETSTATE.state = RETIRE_IDLE;
+  RETSTATE.chkpt_id = 0;
+  RETSTATE.num_loads_left = 0;
+  RETSTATE.num_stores_left = 0;
+  RETSTATE.num_branches_left = 0;
+  RETSTATE.amo = false;
+  RETSTATE.csr = false;
+  RETSTATE.exception = false;
+  
 
   /////////////////////////////////////////////////////////////
   // Pipeline widths.
@@ -475,7 +488,7 @@ static reg_t execute_insn(pipeline_t* p, reg_t pc, insn_fetch_t fetch)
 }
 
 //Scope of this function is just this file
-static void update_timer(state_t* state, size_t instret)
+extern void update_timer(state_t* state, size_t instret)
 {
   uint64_t count0 = (uint64_t)(uint32_t)state->count;
   state->count += instret;
@@ -536,21 +549,16 @@ bool pipeline_t::step_micro(size_t instret_limit, size_t& instret)
         size_t lane_number;
 
         unsigned int prev_commit_count = counter(commit_count);
-        for (lane_number = 0; lane_number < RETIRE_WIDTH; lane_number++) {
-          retire(instret);            // Retire Stage
-          update_timer(&state, instret-prev_instret);
-          prev_instret = instret;
-          // Halt retirement if its time for an HTIF tick as this will change state
-          if(instret == instret_limit)
-            break;
-          // Stop simulation if limit reached
-          if((counter(commit_count) >= stop_amt) && use_stop_amt){
-            //stats->dump_knobs();
-            //stats->dump_counters();
-            //stats->dump_rates();
-            return true;
-          }
-        }
+
+//WIP: retirement code chang for CPR START
+      retire(instret, instret_limit);            // Retire Stage
+      // Stop simulation if limit reached
+      if((counter(commit_count) >= stop_amt) && use_stop_amt){
+        return true;
+      }
+//WIP: retirement code chang for CPR FINISH
+
+
         // Increment the retired bundle count if even a single instruction retired
         if(counter(commit_count) > prev_commit_count)
           inc_counter(retired_bundle_count);
@@ -731,18 +739,6 @@ uint32_t pipeline_t::get_instruction(uint64_t inst_pc){
   return (uint32_t)inst_raw.insn.bits();
 }
 
-void pipeline_t::set_exception(unsigned int al_index) {
-   REN->set_exception(al_index);
-}
-
-void pipeline_t::set_load_violation(unsigned int al_index) {
-   REN->set_load_violation(al_index);
-}
-
-void pipeline_t::set_branch_misprediction(unsigned int al_index) {
-   REN->set_branch_misprediction(al_index);
-}
-
-void pipeline_t::set_value_misprediction(unsigned int al_index) {
-   REN->set_value_misprediction(al_index);
+void pipeline_t::set_exception(unsigned int checkpoint_ID) {
+   REN->set_exception(checkpoint_ID);
 }

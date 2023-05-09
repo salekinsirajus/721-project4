@@ -33,12 +33,13 @@ issue_queue::issue_queue(unsigned int size, unsigned int num_parts, pipeline_t* 
 }
 
 bool issue_queue::stall(unsigned int bundle_inst) {
+    //printf("DEBUG: issue queue is being stalled\n");
 	assert((length + fl_length) == size);
   ifprintf(logging_on,proc->dispatch_log,"ISSUE_QUEUE: Checking for stall fl_length: %u  length: %u bundle_inst: %u stall: %s\n",fl_length,length,bundle_inst,(fl_length < bundle_inst)?"true":"false");
 	return(fl_length < bundle_inst);
 }
 
-void issue_queue::dispatch(unsigned int index, unsigned long long branch_mask, unsigned int lane_id,
+void issue_queue::dispatch(unsigned int index, unsigned long long checkpoint_ID, unsigned int lane_id,
                            bool A_valid, bool A_ready, unsigned int A_tag,
                            bool B_valid, bool B_ready, unsigned int B_tag,
                            bool D_valid, bool D_ready, unsigned int D_tag) {
@@ -58,7 +59,7 @@ void issue_queue::dispatch(unsigned int index, unsigned long long branch_mask, u
 	assert(!q[free].valid);
 	q[free].valid = true;
 	q[free].index = index;
-	q[free].branch_mask = branch_mask;
+	q[free].checkpoint_ID = checkpoint_ID;
 	q[free].lane_id = lane_id;
 	q[free].A_valid = A_valid;
 	q[free].A_ready = A_ready;
@@ -184,7 +185,7 @@ void issue_queue::select_and_issue(unsigned int num_lanes, lane* Execution_Lanes
             // Issue the instruction to the Register Read Stage within the Execution Lane.
             Execution_Lanes[q[i].lane_id].rr.valid = true;
             Execution_Lanes[q[i].lane_id].rr.index = q[i].index;
-            Execution_Lanes[q[i].lane_id].rr.branch_mask = q[i].branch_mask;
+            Execution_Lanes[q[i].lane_id].rr.checkpoint_ID = q[i].checkpoint_ID;
 
             // Remove the instruction from the issue queue.
             remove(i);
@@ -268,6 +269,24 @@ void issue_queue::remove(unsigned int i) {
 void issue_queue::flush() {
 	length = 0;
 	for (unsigned int i = 0; i < size; i++) {
+        if (q[i].valid){
+            //get the physical registers for both src and dest
+            if (q[i].A_valid){
+                proc->REN->dec_usage_counter(q[i].A_tag);
+            }
+            if (q[i].B_valid){
+                proc->REN->dec_usage_counter(q[i].B_tag);
+            }
+            if (q[i].D_valid){
+                proc->REN->dec_usage_counter(q[i].D_tag);
+            }
+            
+            if (proc->PAY.buf[q[i].index].C_valid){
+                //FIXME: is this the right way to access the Payload buffer entry
+                proc->REN->dec_usage_counter(proc->PAY.buf[q[i].index].C_phys_reg);
+            }
+        }
+
 		q[i].valid = false;
 	}
 
@@ -282,15 +301,20 @@ void issue_queue::flush() {
 	youngest = -1;
 }
 
-void issue_queue::clear_branch_bit(unsigned int branch_ID) {
-	for (unsigned int i = 0; i < size; i++) {
-		CLEAR_BIT(q[i].branch_mask, branch_ID);
-	}
-}
+//FIXME: Redo/delete fro CPR
+//void issue_queue::clear_branch_bit(unsigned int branch_ID) {
+//	for (unsigned int i = 0; i < size; i++) {
+//		CLEAR_BIT(q[i].branch_mask, branch_ID);
+//	}
+//}
 
-void issue_queue::squash(unsigned int branch_ID) {
+void issue_queue::squash(uint64_t squash_mask) {
+    uint64_t chkpt_id;
 	for (unsigned int i = 0; i < size; i++) {
-		if (q[i].valid && BIT_IS_ONE(q[i].branch_mask, branch_ID)) {
+        chkpt_id = q[i].checkpoint_ID;
+		if (q[i].valid && BIT_IS_ONE(squash_mask, chkpt_id)) {
+            proc->dec_for_pipeline_registers(q[i].index);
+            q[i].valid = false;
 			remove(i);
 		}
 	}
@@ -302,7 +326,7 @@ void issue_queue::dump_iq(pipeline_t* proc, unsigned int index,FILE* file)
   proc->disasm(proc->PAY.buf[q[index].index].inst,proc->cycle,proc->PAY.buf[q[index].index].pc,proc->PAY.buf[q[index].index].sequence,file);
   ifprintf(logging_on,file,"fl_head %d fl_tail %d fl_length %d\n",fl_head, fl_tail, fl_length);
   ifprintf(logging_on,file,"valid      : %u\t",           q[index].valid);
-  ifprintf(logging_on,file,"branch_mask: %" PRIu64 "\t",  q[index].branch_mask);
+  ifprintf(logging_on,file,"branch_mask: %" PRIu64 "\t",  q[index].checkpoint_ID);
   ifprintf(logging_on,file,"lane_id    : %u\t",           q[index].lane_id);
   ifprintf(logging_on,file,"\n");
   ifprintf(logging_on,file,"RS1_Valid  : %u\t",           q[index].A_valid);

@@ -1,5 +1,42 @@
 #include "pipeline.h"
 
+void pipeline_t::dec_for_pipeline_registers(uint64_t index){
+    //printf("START decrementing Source and Destination registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
+    if (PAY.buf[index].A_valid){
+/*
+        printf("%X: decrementing usage counter for A_phys_reg %d\n", PAY.buf[index].pc,
+            PAY.buf[index].A_phys_reg
+        );
+*/
+        REN->dec_usage_counter(PAY.buf[index].A_phys_reg);
+    }
+    if (PAY.buf[index].B_valid){
+/*
+        printf("%X: decrementing usage counter for B_phys_reg %d\n", PAY.buf[index].pc,
+            PAY.buf[index].B_phys_reg
+        );
+*/
+        REN->dec_usage_counter(PAY.buf[index].B_phys_reg);
+    }
+    if (PAY.buf[index].D_valid){
+/*
+        printf("%X: decrementing usage counter for D_phys_reg %d\n", PAY.buf[index].pc,
+            PAY.buf[index].D_phys_reg
+        );
+*/
+        REN->dec_usage_counter(PAY.buf[index].D_phys_reg);
+    }
+    if (PAY.buf[index].C_valid){
+/*
+        printf("%X: decrementing usage counter for C_phys_reg %d\n", PAY.buf[index].pc,
+            PAY.buf[index].C_phys_reg
+        );
+*/
+        REN->dec_usage_counter(PAY.buf[index].C_phys_reg);
+    }
+
+//    printf("DONE Decremenging Source and Dest registers\n", PAY.buf[index].checkpoint_ID, PAY.buf[index].pc);
+}
 
 void pipeline_t::squash_complete(reg_t jump_PC) {
 	unsigned int i, j;
@@ -47,6 +84,9 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	//////////////////////////
 
 	for (i = 0; i < dispatch_width; i++) {
+		if (DISPATCH[i].valid){
+            dec_for_pipeline_registers(DISPATCH[i].index);
+        }
 		DISPATCH[i].valid = false;
 	}
 
@@ -62,90 +102,94 @@ void pipeline_t::squash_complete(reg_t jump_PC) {
 	// Writeback Stage
 	//////////////////////////
 
+    uint64_t idx;
 	for (i = 0; i < issue_width; i++) {
+		if (Execution_Lanes[i].rr.valid){
+            dec_for_pipeline_registers(Execution_Lanes[i].rr.index);
+        }
 		Execution_Lanes[i].rr.valid = false;
-		for (j = 0; j < Execution_Lanes[i].ex_depth; j++)
-		   Execution_Lanes[i].ex[j].valid = false;
-		Execution_Lanes[i].wb.valid = false;
+
+        // Execute Stage:
+        for (j = 0; j < Execution_Lanes[i].ex_depth; j++) {
+           if (Execution_Lanes[i].ex[j].valid){
+            //dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
+            if ((PAY.buf[Execution_Lanes[i].ex[j].index].C_valid)){
+                REN->dec_usage_counter(PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
+            }
+            Execution_Lanes[i].ex[j].valid = false;
+            }
+        }
+
+
+		if (Execution_Lanes[i].wb.valid){
+		    Execution_Lanes[i].wb.valid = false;
+        }
 	}
 
 	LSU.flush();
+
+    instr_renamed_since_last_checkpoint = 0;
 }
 
 
-void pipeline_t::resolve(unsigned int branch_ID, bool correct) {
+//void pipeline_t::resolve(unsigned int branch_ID, bool correct) {
+void pipeline_t::selective_squash(uint64_t squash_mask) {
+    //printf("in pipeline_t:selective_squash: passed squash mask: %lu\n", squash_mask);
 	unsigned int i, j;
 
-	if (correct) {
-		// Instructions in the Rename2 through Writeback Stages have branch masks.
-		// The correctly-resolved branch's bit must be cleared in all branch masks.
+    // Squash all instructions in the Decode through Dispatch Stages.
 
-		for (i = 0; i < dispatch_width; i++) {
-			// Rename2 Stage:
-			CLEAR_BIT(RENAME2[i].branch_mask, branch_ID);
+    // Decode Stage:
+    for (i = 0; i < fetch_width; i++) {
+        DECODE[i].valid = false;
+    }
 
-			// Dispatch Stage:
-			CLEAR_BIT(DISPATCH[i].branch_mask, branch_ID);
-		}
+    // Rename1 Stage:
+    FQ.flush();
 
-		// Schedule Stage:
-		IQ.clear_branch_bit(branch_ID);
+    // Rename2 Stage:
+    for (i = 0; i < dispatch_width; i++) {
+        RENAME2[i].valid = false;
+    }
 
-		for (i = 0; i < issue_width; i++) {
-			// Register Read Stage:
-			CLEAR_BIT(Execution_Lanes[i].rr.branch_mask, branch_ID);
+    // Dispatch Stage:
+    //printf("pipeline_t:selective_squash() START going over the instructions in dispatch pipeline regs\n");
+    for (i = 0; i < dispatch_width; i++) {
+        //                          This is alwyas 1
+        if ((DISPATCH[i].valid) && (BIT_IS_ONE(squash_mask, PAY.buf[DISPATCH[i].index].checkpoint_ID))){
+            dec_for_pipeline_registers(DISPATCH[i].index);
+        }
+        //invalidate all instructions in dispatch
+        DISPATCH[i].valid = false;
+    }
 
-			// Execute Stage:
-			for (j = 0; j < Execution_Lanes[i].ex_depth; j++)
-			   CLEAR_BIT(Execution_Lanes[i].ex[j].branch_mask, branch_ID);
+    // Schedule Stage:
+    IQ.squash(squash_mask);
 
-			// Writeback Stage:
-			CLEAR_BIT(Execution_Lanes[i].wb.branch_mask, branch_ID);
-		}
-	}
-	else {
-		// Squash all instructions in the Decode through Dispatch Stages.
+    //WIP
+    for (i = 0; i < issue_width; i++) {
+        // Register Read Stage:
+        if (Execution_Lanes[i].rr.valid && BIT_IS_ONE(squash_mask, PAY.buf[Execution_Lanes[i].rr.index].checkpoint_ID)) {
+            dec_for_pipeline_registers(Execution_Lanes[i].rr.index);
+            Execution_Lanes[i].rr.valid = false;
+        }
 
-		// Decode Stage:
-		for (i = 0; i < fetch_width; i++) {
-			DECODE[i].valid = false;
-		}
+        // Execute Stage:
+        for (j = 0; j < Execution_Lanes[i].ex_depth; j++) {
+           if (Execution_Lanes[i].ex[j].valid && BIT_IS_ONE(squash_mask, PAY.buf[Execution_Lanes[i].ex[j].index].checkpoint_ID)) {
+            //dec_for_pipeline_registers(Execution_Lanes[i].ex[j].index);
+            if ((PAY.buf[Execution_Lanes[i].ex[j].index].C_valid)){
+                //printf("EX: squashing the dest register for %d\n", PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
+                REN->dec_usage_counter(PAY.buf[Execution_Lanes[i].ex[j].index].C_phys_reg);
+            }
+            Execution_Lanes[i].ex[j].valid = false;
+            }
+        }
 
-		// Rename1 Stage:
-		FQ.flush();
-
-		// Rename2 Stage:
-		for (i = 0; i < dispatch_width; i++) {
-			RENAME2[i].valid = false;
-		}
-
-		// Dispatch Stage:
-		for (i = 0; i < dispatch_width; i++) {
-			DISPATCH[i].valid = false;
-		}
-
-		// Selectively squash instructions after the branch, in the Schedule through Writeback Stages.
-
-		// Schedule Stage:
-		IQ.squash(branch_ID);
-
-		for (i = 0; i < issue_width; i++) {
-			// Register Read Stage:
-			if (Execution_Lanes[i].rr.valid && BIT_IS_ONE(Execution_Lanes[i].rr.branch_mask, branch_ID)) {
-				Execution_Lanes[i].rr.valid = false;
-			}
-
-			// Execute Stage:
-			for (j = 0; j < Execution_Lanes[i].ex_depth; j++) {
-			   if (Execution_Lanes[i].ex[j].valid && BIT_IS_ONE(Execution_Lanes[i].ex[j].branch_mask, branch_ID)) {
-				Execution_Lanes[i].ex[j].valid = false;
-			   }
-			}
-
-			// Writeback Stage:
-			if (Execution_Lanes[i].wb.valid && BIT_IS_ONE(Execution_Lanes[i].wb.branch_mask, branch_ID)) {
-				Execution_Lanes[i].wb.valid = false;
-			}
-		}
-	}
+        // Writeback Stage:
+        if ((Execution_Lanes[i].wb.valid) && BIT_IS_ONE(squash_mask, PAY.buf[Execution_Lanes[i].wb.index].checkpoint_ID)) {
+            //dec_for_pipeline_registers(Execution_Lanes[i].wb.index);
+            Execution_Lanes[i].wb.valid = false;
+        }
+    }
 }

@@ -4,6 +4,7 @@
 
 class renamer {
 private:
+    uint64_t _fl_count;
     /////////////////////////////////////////////////////////////////////
     // Put private class variables here.
     /////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ private:
     // Structure 2: Architectural Map Table
     // Entry contains: physical register mapping
     /////////////////////////////////////////////////////////////////////
-    uint64_t *amt;
+
 
     uint64_t map_table_size; //AMT and RMT size
     /////////////////////////////////////////////////////////////////////
@@ -80,31 +81,6 @@ private:
     // Notes:
     // * Structure includes head, tail, and their phase bits.
     /////////////////////////////////////////////////////////////////////
-    typedef struct al_entry_t{
-        bool           has_dest;
-        uint64_t        logical;
-        uint64_t       physical;
-        bool          completed;
-        bool          exception;
-        bool     load_violation;
-        bool      br_mispredict;
-        bool     val_mispredict;
-        bool            is_load;
-        bool           is_store;
-        bool          is_branch;
-        bool             is_amo;
-        bool             is_csr;
-        uint64_t             pc;
-    } al_entry;
-
-    typedef struct active_list_t {
-        uint64_t head, head_phase;
-        uint64_t tail, tail_phase;
-        al_entry_t *list;
-    }active_list;
-    //TODO: verify this works
-    active_list al;
-    uint64_t active_list_size;
 
 
     /////////////////////////////////////////////////////////////////////
@@ -122,82 +98,38 @@ private:
     // Entry contains: ready bit
     /////////////////////////////////////////////////////////////////////
     uint64_t *prf_ready;
+    uint64_t *prf_usage_counter;
+    uint64_t *prf_unmapped;
 
     uint64_t num_phys_reg;
 
-    /////////////////////////////////////////////////////////////////////
-    // Structure 7: Global Branch Mask (GBM)
-    //
-    // The Global Branch Mask (GBM) is a bit vector that keeps track of
-    // all unresolved branches. A '1' bit corresponds to an unresolved
-    // branch. The "branch ID" of the unresolved branch is its position
-    // in the bit vector.
-    //
-    // The GBM serves two purposes:
-    //
-    // 1. It provides a means for allocating checkpoints to unresolved
-    //    branches. There are as many checkpoints as there are bits in
-    //    the GBM. If all bits in the GBM are '1', then there are no
-    //    free bits, hence, no free checkpoints. On the other hand, if
-    //    not all bits in the GBM are '1', then any of the '0' bits
-    //    are free and the corresponding checkpoints are free.
-    //    
-    // 2. Each in-flight instruction needs to know which unresolved
-    //    branches it depends on, i.e., which unresolved branches are
-    //    logically before it in program order. This information
-    //    makes it possible to squash instructions that are after a
-    //    branch, in program order, and not instructions before the
-    //    branch. This functionality will be implemented using
-    //    branch masks, as was done in the MIPS R10000 processor.
-    //    An instruction's initial branch mask is the value of the
-    //    the GBM when the instruction is renamed.
-    //
-    // The simulator requires an efficient implementation of bit vectors,
-    // for quick copying and manipulation of bit vectors. Therefore, you
-    // must implement the GBM as type "uint64_t".
-    // (#include <inttypes.h>, already at top of this file)
-    // The "uint64_t" type contains 64 bits, therefore, the simulator
-    // cannot support a processor configuration with more than 64
-    // unresolved branches. The maximum number of unresolved branches
-    // is configurable by the user of the simulator, and can range from
-    // 1 to 64.
-    /////////////////////////////////////////////////////////////////////
-    uint64_t GBM;
+    typedef struct chkpt_t{
+        uint64_t *rmt;
+        bool     amo;
+        bool     csr;
+        bool     exception;
+        uint64_t load_counter;
+        uint64_t store_counter;
+        uint64_t branch_counter;
+        uint64_t uncompleted_instruction_counter;
+        uint64_t *unmapped_bits;
+    }chkpt;
 
-    /////////////////////////////////////////////////////////////////////
-    // Structure 8: Branch Checkpoints
-    //
-    // Each branch checkpoint contains the following:
-    // 1. Shadow Map Table (checkpointed Rename Map Table)
-    // 2. checkpointed Free List head pointer and its phase bit
-    // 3. checkpointed GBM
-    /////////////////////////////////////////////////////////////////////
-    typedef struct checkpoint_t{
-        uint64_t *shadow_map_table; 
-        uint64_t free_list_head;
-        uint64_t free_list_head_phase;
-        uint64_t gbm;
-    }cp;
-
-    uint64_t shadow_map_table_size;
     uint64_t num_checkpoints;
+    chkpt *checkpoint_buffer;
+    uint64_t chkpt_buffer_head;
+    uint64_t chkpt_buffer_tail;
+    uint64_t chkpt_buffer_head_phase;
+    uint64_t chkpt_buffer_tail_phase;
 
-    checkpoint_t *checkpoints;
 
     /////////////////////////////////////////////////////////////////////
     // Private functions.
     // e.g., a generic function to copy state from one map to another.
     /////////////////////////////////////////////////////////////////////
-    uint64_t allocate_gbm_bit();
-    void init_al_entry(al_entry_t *ale);
     //////////////////////////////////////////
     // Helper functions later implemented  .//
     //////////////////////////////////////////
-    int get_free_al_entry_count();
-    bool active_list_is_empty();
-    bool active_list_is_full();
-    uint64_t insert_into_active_list();
-    bool retire_from_active_list();
 
     bool free_list_is_empty();
     bool free_list_is_full();
@@ -205,21 +137,33 @@ private:
     uint64_t pop_free_list();
     int free_list_regs_available();
     void restore_free_list();
+    uint64_t get_free_checkpoint_count();
+    bool checkpoint_buffer_is_empty();
+    bool checkpoint_buffer_is_full();
+    void reset_checkpoint(uint64_t);
+    void map(uint64_t);
+    void unmap(uint64_t);
+    void generate_squash_mask_array(uint64_t *array, uint64_t rc);
+    uint64_t generate_squash_mask(uint64_t rc);
 
-    /*
     void print_free_list();
+    void print_prf_usage();
+    /*
     void print_amt();
-    void print_rmt();
-    void print_prf();
     void print_prf_ready();
     void print_active_list(bool between_head_and_tail);
     */
-    bool reg_in_amt(uint64_t);
-    bool reg_in_rmt(uint64_t);
+    void print_rmt();
+    bool reg_in_rmt(uint64_t phys_reg);
+    bool in_free_list(uint64_t phys_reg);
     void assert_free_list_invariance(); 
-    void assert_active_list_invariance();
+    void assert_register_count_cpr();
+    void assert_checkpoint_buffer_invariance();
+    uint64_t get_mapped_count();
+    uint64_t get_unmapped_count();
 
 public:
+    bool is_chkpt_valid(uint64_t chkpt_id);
     ////////////////////////////////////////
     // Public functions.
     ////////////////////////////////////////
@@ -244,7 +188,7 @@ public:
     /////////////////////////////////////////////////////////////////////
     renamer(uint64_t n_log_regs,
         uint64_t n_phys_regs,
-        uint64_t n_branches,
+        uint64_t n_chkpts,
         uint64_t n_active);
 
     /////////////////////////////////////////////////////////////////////
@@ -276,23 +220,6 @@ public:
     /////////////////////////////////////////////////////////////////////
     bool stall_reg(uint64_t bundle_dst);
 
-    /////////////////////////////////////////////////////////////////////
-    // The Rename Stage must stall if there aren't enough free
-    // checkpoints for all branches in the current rename bundle.
-    //
-    // Inputs:
-    // 1. bundle_branch: number of branches in current rename bundle
-    //
-    // Return value:
-    // Return "true" (stall) if there aren't enough free checkpoints
-    // for all branches in the current rename bundle.
-    /////////////////////////////////////////////////////////////////////
-    bool stall_branch(uint64_t bundle_branch);
-
-    /////////////////////////////////////////////////////////////////////
-    // This function is used to get the branch mask for an instruction.
-    /////////////////////////////////////////////////////////////////////
-    uint64_t get_branch_mask();
 
     /////////////////////////////////////////////////////////////////////
     // This function is used to rename a single source register.
@@ -303,6 +230,8 @@ public:
     // Return value: physical register name
     /////////////////////////////////////////////////////////////////////
     uint64_t rename_rsrc(uint64_t log_reg);
+    void inc_usage_counter(uint64_t phys_reg);
+    void dec_usage_counter(uint64_t phys_reg);
 
     /////////////////////////////////////////////////////////////////////
     // This function is used to rename a single destination register.
@@ -338,64 +267,25 @@ public:
     // 2. checkpointed Free List head pointer and its phase bit
     // 3. checkpointed GBM
     /////////////////////////////////////////////////////////////////////
-    uint64_t checkpoint();
+    void checkpoint();
+
+    //free the oldest checkpoint
+    void free_checkpoint();
+
+    //whether or not to stall rename due to insufficent checkpoints
+    bool stall_checkpoint(uint64_t bundle_chkpt);
+
+    //get checkpoint ID that's each instruction is associated with
+    //it is the nearest prior checkpoint
+    uint64_t get_checkpoint_ID(bool load, bool store, bool branch, bool amo, bool csr);
+
+    //set exception
+    void set_exception(uint64_t checkpoint_ID);
 
     //////////////////////////////////////////
     // Functions related to Dispatch Stage. //
     //////////////////////////////////////////
 
-    /////////////////////////////////////////////////////////////////////
-    // The Dispatch Stage must stall if there are not enough free
-    // entries in the Active List for all instructions in the current
-    // dispatch bundle.
-    //
-    // Inputs:
-    // 1. bundle_inst: number of instructions in current dispatch bundle
-    //
-    // Return value:
-    // Return "true" (stall) if the Active List does not have enough
-    // space for all instructions in the dispatch bundle.
-    /////////////////////////////////////////////////////////////////////
-    bool stall_dispatch(uint64_t bundle_inst);
-
-    /////////////////////////////////////////////////////////////////////
-    // This function dispatches a single instruction into the Active
-    // List.
-    //
-    // Inputs:
-    // 1. dest_valid: If 'true', the instr. has a destination register,
-    //    otherwise it does not. If it does not, then the log_reg and
-    //    phys_reg inputs should be ignored.
-    // 2. log_reg: Logical register number of the instruction's
-    //    destination.
-    // 3. phys_reg: Physical register number of the instruction's
-    //    destination.
-    // 4. load: If 'true', the instr. is a load, otherwise it isn't.
-    // 5. store: If 'true', the instr. is a store, otherwise it isn't.
-    // 6. branch: If 'true', the instr. is a branch, otherwise it isn't.
-    // 7. amo: If 'true', this is an atomic memory operation.
-    // 8. csr: If 'true', this is a system instruction.
-    // 9. PC: Program counter of the instruction.
-    //
-    // Return value:
-    // Return the instruction's index in the Active List.
-    //
-    // Tips:
-    //
-    // Before dispatching the instruction into the Active List, assert
-    // that the Active List isn't full: it is the user's responsibility
-    // to avoid a structural hazard by calling stall_dispatch()
-    // in advance.
-    /////////////////////////////////////////////////////////////////////
-    uint64_t dispatch_inst(bool dest_valid,
-                           uint64_t log_reg,
-                           uint64_t phys_reg,
-                           bool load,
-                           bool store,
-                           bool branch,
-                           bool amo,
-                           bool csr,
-                           uint64_t PC);
 
     /////////////////////////////////////////////////////////////////////
     // Test the ready bit of the indicated physical register.
@@ -437,7 +327,7 @@ public:
     /////////////////////////////////////////////////////////////////////
     // Set the completed bit of the indicated entry in the Active List.
     /////////////////////////////////////////////////////////////////////
-    void set_complete(uint64_t AL_index);
+    void set_complete(uint64_t checkpoint_ID);
 
     /////////////////////////////////////////////////////////////////////
     // This function is for handling branch resolution.
@@ -487,9 +377,9 @@ public:
     //   reaches the head of the Active List. We don’t want or need
     //   that because we immediately recover within this function.)
     /////////////////////////////////////////////////////////////////////
-    void resolve(uint64_t AL_index,
-             uint64_t branch_ID,
-             bool correct);
+    uint64_t rollback(uint64_t chkpt_id, bool next,
+                           uint64_t &total_loads, uint64_t &total_stores, 
+                           uint64_t &total_branches);
 
     //////////////////////////////////////////
     // Functions related to Retire Stage.   //
@@ -524,11 +414,12 @@ public:
     // * csr flag (whether or not instr. is a system instruction)
     // * program counter of the instruction
     /////////////////////////////////////////////////////////////////////
-    bool precommit(bool &completed,
-                       bool &exception, bool &load_viol, bool &br_misp, bool &val_misp,
-                   bool &load, bool &store, bool &branch, bool &amo, bool &csr,
-               uint64_t &PC);
 
+    bool precommit(uint64_t &chkpt_id,
+                        uint64_t &num_loads,
+                        uint64_t &num_stores,
+                        uint64_t &num_branches,
+                        bool &amo, bool &csr, bool &exception);
     /////////////////////////////////////////////////////////////////////
     // This function commits the instruction at the head of the Active List.
     //
@@ -546,7 +437,7 @@ public:
     // This is why you should assert() that it is valid to commit the
     // head instruction and otherwise cause the simulator to exit.
     /////////////////////////////////////////////////////////////////////
-    void commit();
+    void commit(uint64_t log_reg);
 
     //////////////////////////////////////////////////////////////////////
     // Squash the renamer class.
@@ -559,24 +450,5 @@ public:
     // should be consistent with an empty pipeline.
     /////////////////////////////////////////////////////////////////////
     void squash();
-
-    //////////////////////////////////////////
-    // Functions not tied to specific stage.//
-    //////////////////////////////////////////
-
-    /////////////////////////////////////////////////////////////////////
-    // Functions for individually setting the exception bit,
-    // load violation bit, branch misprediction bit, and
-    // value misprediction bit, of the indicated entry in the Active List.
-    /////////////////////////////////////////////////////////////////////
-    void set_exception(uint64_t AL_index);
-    void set_load_violation(uint64_t AL_index);
-    void set_branch_misprediction(uint64_t AL_index);
-    void set_value_misprediction(uint64_t AL_index);
-
-    /////////////////////////////////////////////////////////////////////
-    // Query the exception bit of the indicated entry in the Active List.
-    /////////////////////////////////////////////////////////////////////
-    bool get_exception(uint64_t AL_index);
 
 };

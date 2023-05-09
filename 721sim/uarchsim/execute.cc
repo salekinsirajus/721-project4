@@ -105,20 +105,20 @@ void pipeline_t::execute(unsigned int lane_number) {
             }
          }
       }
-      else {
+      //else {
+      else if (!IS_AMO(PAY.buf[index].flags) && !IS_CSR(PAY.buf[index].flags)) {
          // Execute the ALU-type instruction on the ALU.
          try {
             alu(index);
          }
          // Catch exceptions thrown by the ALU.
          catch (trap_t& t){
-            unsigned int al_index = PAY.buf[index].AL_index;
             reg_t epc = PAY.buf[index].pc;
-            ifprintf(logging_on,execute_log, "Cycle %" PRIcycle ": core %3d: exception refernce thrown from unknown source %s, epc 0x%016" PRIx64 " al_index %u\n", cycle, id, t.name(), epc, al_index);
+            ifprintf(logging_on,execute_log, "Cycle %" PRIcycle ": core %3d: exception refernce thrown from unknown source %s, epc 0x%016" PRIx64 " \n", cycle, id, t.name(), epc);
             // Below is the only three traps the ALU could throw
             assert(t.cause() == CAUSE_FP_DISABLED || t.cause() == CAUSE_ILLEGAL_INSTRUCTION || t.cause() == CAUSE_PRIVILEGED_INSTRUCTION);
             PAY.buf[index].trap.post(t);
-            REN->set_exception(al_index);
+            REN->set_exception(PAY.buf[index].checkpoint_ID);
          }
 
          // FIX_ME #14
@@ -161,7 +161,7 @@ void pipeline_t::execute(unsigned int lane_number) {
       if (!IS_LOAD(PAY.buf[index].flags) || hit) {
          Execution_Lanes[lane_number].wb.valid = true;
          Execution_Lanes[lane_number].wb.index = Execution_Lanes[lane_number].ex[depth].index;
-         Execution_Lanes[lane_number].wb.branch_mask = Execution_Lanes[lane_number].ex[depth].branch_mask;
+         Execution_Lanes[lane_number].wb.checkpoint_ID = Execution_Lanes[lane_number].ex[depth].checkpoint_ID;
       }
 
       // Remove instruction from Execute Stage.
@@ -218,7 +218,7 @@ void pipeline_t::execute(unsigned int lane_number) {
          // Copy instruction from [depth-1] sub-stage to [depth] sub-stage.
          Execution_Lanes[lane_number].ex[depth].valid = true;
          Execution_Lanes[lane_number].ex[depth].index = Execution_Lanes[lane_number].ex[depth-1].index;
-         Execution_Lanes[lane_number].ex[depth].branch_mask = Execution_Lanes[lane_number].ex[depth-1].branch_mask;
+         Execution_Lanes[lane_number].ex[depth].checkpoint_ID = Execution_Lanes[lane_number].ex[depth-1].checkpoint_ID;
 
          // Remove instruction from [depth-1] sub-stage.
          Execution_Lanes[lane_number].ex[depth-1].valid = false;
@@ -272,7 +272,7 @@ void pipeline_t::load_replay() {
       // 2. Set the completed bit for this instruction in the Active List.
 
       // FIX_ME #18b BEGIN
-      REN->set_complete(PAY.buf[index].AL_index);
+      REN->set_complete(PAY.buf[index].checkpoint_ID);
       // FIX_ME #18b END
    }
 }

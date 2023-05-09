@@ -366,7 +366,7 @@ private:
 	void agen(unsigned int index);
 	void alu(unsigned int index);
 	void squash_complete(reg_t jump_PC);
-	void resolve(unsigned int branch_ID, bool correct);
+    void selective_squash(uint64_t squash_mask);
 	void checker();
 	void check_single(reg_t micro, reg_t isa, db_t* actual, const char *desc);
 	void check_double(reg_t micro0, reg_t micro1, reg_t isa0, reg_t isa1, const char *desc);
@@ -389,6 +389,24 @@ public:
 	uint64_t num_insn;
 	uint64_t num_insn_split;
 
+    //cpr related stuff
+    uint64_t max_instr_bw_checkpoints;
+    uint64_t instr_renamed_since_last_checkpoint;
+    //temp
+    uint64_t renamer_stalled_cycles_count;
+
+    //retirement state machine?
+    typedef enum {RETIRE_IDLE, RETIRE_BULK_COMMIT, RETIRE_FINALIZE} retire_state_e;
+    typedef struct {
+        retire_state_e state;
+        //following variabls should be passed by reference
+        uint64_t chkpt_id;
+        uint64_t num_loads_left, num_stores_left, num_branches_left; 
+        bool amo, csr, exception;
+        uint64_t log_reg;
+    } retire_state_t;
+    
+    retire_state_t RETSTATE;
 
 	// Functions for pipeline stages.
 	void fetch();
@@ -400,13 +418,13 @@ public:
 	void register_read(unsigned int lane_number);
 	void execute(unsigned int lane_number);
 	void writeback(unsigned int lane_number);
-	void retire(size_t& instret);
+	void retire(size_t& instret, size_t instret_limit);
 	void load_replay();
-	void set_exception(unsigned int al_index);
+	void set_exception(unsigned int checkpoint_ID);
 	void set_load_violation(unsigned int al_index);
 	void set_branch_misprediction(unsigned int al_index);
 	void set_value_misprediction(unsigned int al_index);
-
+    void dec_for_pipeline_registers(uint64_t index);
   //TODO: Implement these functions
 	// Miscellaneous other functions.
 	//void next_cycle();
@@ -418,6 +436,5 @@ public:
 };
 
 //reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc);
-
 
 #endif //RISCV_PIPELINE_H

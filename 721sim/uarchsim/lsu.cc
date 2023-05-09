@@ -10,7 +10,9 @@
 bool lsu::disambiguate(unsigned int lq_index,
                        unsigned int sq_index, bool sq_index_phase,
                        bool& forward,
-                       unsigned int& store_entry) {
+                       unsigned int& store_entry,
+                       bool& partial) {
+
 	bool stall;		// return value
 	uint64_t max_size;
 	uint64_t mask;
@@ -45,13 +47,17 @@ bool lsu::disambiguate(unsigned int lq_index,
 			         (LQ[lq_index].addr    & mask)) {
 				// There is a conflict.
 				if (SQ[store_entry].size != LQ[lq_index].size) {
-					stall = true;    // stall: partial conflict scenarios are hard
+                   //stall = true;    // stall: partial conflict scenarios are hard
+                   // CPR deadlock kluge.
+                   forward = true;
+                   partial = true;
 				}
 				else if (!SQ[store_entry].value_avail) {
 					stall = true;    // stall: must wait for value to be available
 				}
 				else {
 					forward = true;    // forward: sizes match and value is available
+                    partial = false;
 				}
 			}
 		} while ((store_entry != sq_head) && !stall && !forward);
@@ -158,6 +164,7 @@ lsu::lsu(unsigned int lq_size, unsigned int sq_size, unsigned int Tid, mmu_t* _m
 	n_true_stall = 0;
 	n_false_stall = 0;
 	n_load_violation = 0;
+    n_cpr_deadlock_kluge = 0;
 }
 
 lsu::~lsu(){
@@ -218,6 +225,8 @@ void lsu::dispatch(bool load,
 		LQ[lq_tail].stat_forward = false;
 		LQ[lq_tail].stat_load_violation = false;
 		LQ[lq_tail].stat_late_store_match = false;
+        LQ[lq_tail].stat_cpr_deadlock_kluge = false;
+
 
     #ifdef RISCV_MICRO_DEBUG
       LOG(proc->lsu_log,proc->cycle,proc->PAY.buf[pay_index].sequence,proc->PAY.buf[pay_index].pc,"Dispatching load lq entry %u",lq_tail);
@@ -258,6 +267,7 @@ void lsu::dispatch(bool load,
 		SQ[sq_tail].stat_forward = false;
 		SQ[sq_tail].stat_load_violation = false;
 		SQ[sq_tail].stat_late_store_match = false;
+        SQ[sq_tail].stat_cpr_deadlock_kluge = false;
 
     #ifdef RISCV_MICRO_DEBUG
       LOG(proc->lsu_log,proc->cycle,proc->PAY.buf[pay_index].sequence,proc->PAY.buf[pay_index].pc,"Dispatching store sq entry %u",sq_tail);
@@ -326,23 +336,29 @@ void lsu::store_addr(cycle_t cycle,
       }
    } 
    catch (mem_trap_t& t) {
-      unsigned int al_index = proc->PAY.buf[SQ[sq_index].pay_index].AL_index;
+      unsigned int checkpoint_ID = proc->PAY.buf[SQ[sq_index].pay_index].checkpoint_ID;
       assert((t.cause() == CAUSE_FAULT_STORE) || (t.cause() == CAUSE_MISALIGNED_STORE));
-      proc->set_exception(al_index);
+      proc->set_exception(checkpoint_ID);
       proc->PAY.buf[SQ[sq_index].pay_index].trap.post(t);
 
       return;
    }
 
    // Detect and mark load violations.
+   //TODO/FIXME: Probably will need for CPR phase 2
+
    if (SPEC_DISAMBIG) {
+
+    /*
       unsigned int load_entry;
       unsigned int al_index;
       if (ld_violation(sq_index, lq_index, lq_index_phase, load_entry)) {
          al_index = proc->PAY.buf[LQ[load_entry].pay_index].AL_index;
          proc->set_load_violation(al_index);
       }
+    */
    }
+
 
    if (!PERFECT_DCACHE) {
       bool hit;
@@ -440,6 +456,7 @@ void lsu::execute_load(cycle_t cycle,
                        unsigned int sq_index, bool sq_index_phase) {
 	bool stall_disambig;
 	bool forward;
+    bool partial;
 	unsigned int store_entry;
 
 	assert(LQ[lq_index].valid);
@@ -454,13 +471,15 @@ void lsu::execute_load(cycle_t cycle,
            }
            else {
 	      // Load reservation has not yet reached the head of the LQ and must stall.
+          
 	      return;
 	   }
         }
 
   inc_counter(spec_load_count);
 
-	stall_disambig = disambiguate(lq_index, sq_index, sq_index_phase, forward, store_entry);
+    stall_disambig = disambiguate(lq_index, sq_index, sq_index_phase, forward, store_entry, partial);
+
 
   #ifdef RISCV_MICRO_DEBUG
     LOG(proc->lsu_log,proc->cycle,proc->PAY.buf[LQ[lq_index].pay_index].sequence,proc->PAY.buf[LQ[lq_index].pay_index].pc,"Executing load lq entry %u",lq_index);
@@ -471,6 +490,42 @@ void lsu::execute_load(cycle_t cycle,
 		// STATS
 		LQ[lq_index].stat_load_stall_disambig = true;
 	}
+
+   else if (forward && partial) {
+           uint64_t load_chkpt_id = proc->PAY.buf[LQ[lq_index].pay_index].checkpoint_ID;
+           uint64_t store_chkpt_id = proc->PAY.buf[SQ[store_entry].pay_index].checkpoint_ID;
+      if (load_chkpt_id == store_chkpt_id) {
+        // printf("lsu patch: load_chkpt_id and store_chkpt_id are the same\n");
+         // The conflicting store and load of different sizes are in the same checkpoint interval.
+         // Don't stall the load, otherwise CPR will deadlock.
+         // This should be rare, so rather than model the complexity of partial store-load forwarding,
+         // let's "cheat" by using the actual load value from the functional simulator.
+         // Count how often we had to do this to gauge simulation error.
+         if (proc->PAY.buf[LQ[lq_index].pay_index].good_instruction) {
+                 db_t *actual = proc->get_pipe()->peek(proc->PAY.buf[LQ[lq_index].pay_index].db_index);
+            LQ[lq_index].value = actual->a_rdst[0].value;
+         //   printf("first if: cheating with functional simulator\n");
+         }
+         else {
+        // Load will in any case get squashed (incorrect control-flow path), so use a sentinel value.
+            //printf("else: setting DEADBEEF since it will get squashed anyway??\n");
+            LQ[lq_index].value = 0xDEADBEEF;
+         }
+         // The load value is now available.
+         LQ[lq_index].value_avail = true;
+
+         // STATS
+         LQ[lq_index].stat_cpr_deadlock_kluge = true;
+      }
+      else {
+         // The conflicting store and load of different sizes are in different checkpoint intervals.
+         // Stalling the load will not cause CPR to deadlock.
+         // STATS
+        // printf("The conflicting store and load of different sizes are in different checkpoint intervals\n");
+         LQ[lq_index].stat_load_stall_disambig = true;
+      }
+   }
+
 	else if (forward) {
 		// STATS
 		LQ[lq_index].stat_forward = true;
@@ -568,13 +623,13 @@ void lsu::execute_load(cycle_t cycle,
     } 
     catch (mem_trap_t& t)
 	  {
-      unsigned int al_index = proc->PAY.buf[LQ[lq_index].pay_index].AL_index;
+      unsigned int chkpt_id = proc->PAY.buf[LQ[lq_index].pay_index].checkpoint_ID;
       reg_t epc = proc->PAY.buf[LQ[lq_index].pay_index].pc;
 		  ifprintf(logging_on,proc->lsu_log, "Cycle %" PRIcycle ": core %3d: load exception %s, epc 0x%016" PRIx64 " badvaddr 0x%16" PRIx64 "\n",
 		          proc->cycle, proc->id, t.name(), epc, t.get_badvaddr());
 
       assert(t.cause() == CAUSE_FAULT_LOAD || t.cause() == CAUSE_MISALIGNED_LOAD);
-      proc->set_exception(al_index);
+      proc->set_exception(chkpt_id);
       proc->PAY.buf[LQ[lq_index].pay_index].trap.post(t);
 	  }
 
@@ -604,7 +659,59 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 	// Restore LQ.
 	/////////////////////////////
 
+    unsigned int old_lq_tail = lq_tail;
+    unsigned int rc_lq_tail = recover_lq_tail;
+
+
+    while (old_lq_tail != rc_lq_tail){
+        if (rc_lq_tail == 90){
+            //printf("RC LQ Tail: %d\n", rc_lq_tail);
+        }
+
+        //if (LQ[rc_lq_tail].valid){
+            if ((LQ[rc_lq_tail].addr_avail) && (!LQ[rc_lq_tail].value_avail)){
+                if (proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_valid){
+                    proc->REN->dec_usage_counter(proc->PAY.buf[LQ[rc_lq_tail].pay_index].C_phys_reg);
+                }
+            }
+        //}
+        LQ[rc_lq_tail].valid = false;
+        rc_lq_tail = MOD_S((rc_lq_tail + 1), lq_size);
+    }
+
+    //edge case
+/*
+    if (recover_lq_tail == lq_tail){
+        if ((LQ[lq_tail].addr_avail) && (!LQ[lq_tail].value_avail)){
+            if (proc->PAY.buf[LQ[lq_tail].pay_index].C_valid){
+                proc->REN->dec_usage_counter(proc->PAY.buf[LQ[lq_tail].pay_index].C_phys_reg);
+            }
+        }
+    }
+*/
+    //printf("lsu::restore() - ENDED   restoring. rc_lq_tail %d, old_lq_tail: %d\n", rc_lq_tail, old_lq_tail);
+
+
 	// Restore tail state.
+	/////////////////////////////
+	// Restore SQ.
+	/////////////////////////////
+    unsigned int old_sq_tail = sq_tail;
+    //unsigned int old_sq_tail = proc->PAY.buf[proc->PAY.head].SQ_index;
+    unsigned int rc_sq_tail = recover_sq_tail;
+
+   // printf("lsu::restore() - STARTED  restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+    while (old_sq_tail != rc_sq_tail){
+        //printf("RC SQ Tail: %d, addr_avail: %d, val_avail: %d\n", rc_sq_tail, SQ[rc_sq_tail].addr_avail, SQ[rc_sq_tail].value_avail);
+
+            SQ[rc_sq_tail].valid = false;
+        rc_sq_tail = MOD_S((rc_sq_tail + 1), sq_size);
+    }
+/*
+    if (sq_tail == recover_lq_tail){SQ[sq_tail].valid = false;}
+    //printf("lsu::restore() - ENDED   restoring SQ. rc_sq_tail %d, old_sq_tail: %d\n", rc_sq_tail, old_sq_tail);
+*/
+
 	lq_tail = recover_lq_tail;
 	lq_tail_phase = recover_lq_tail_phase;
 
@@ -613,24 +720,17 @@ void lsu::restore(unsigned int recover_lq_tail, bool recover_lq_tail_phase,
 	if ((lq_length == 0) && (lq_tail_phase != lq_head_phase)) {
 		lq_length = lq_size;
 	}
-
+    
 	// Restore valid bits in two steps:
 	// (1) Clear all valid bits.
 	// (2) Set valid bits between head and tail.
+    for (unsigned int i = 0; i < lq_size; i++) {
+        LQ[i].valid = false;
+    }
+    for (unsigned int i = 0, j = lq_head; i < lq_length; i++, j = MOD_S((j+1), lq_size)) {
+        LQ[j].valid = true;
+    }
 
-	for (unsigned int i = 0; i < lq_size; i++) {
-		LQ[i].valid = false;
-	}
-
-	for (unsigned int i = 0, j = lq_head; i < lq_length; i++, j = MOD_S((j+1), lq_size)) {
-		LQ[j].valid = true;
-	}
-
-	/////////////////////////////
-	// Restore SQ.
-	/////////////////////////////
-
-	// Restore tail state.
 	sq_tail = recover_sq_tail;
 	sq_tail_phase = recover_sq_tail_phase;
 
@@ -689,6 +789,8 @@ void lsu::train(bool load) {
          n_forward++;
       if (LQ[lq_head].stat_load_stall_miss)
          n_stall_miss_l++;
+      if (LQ[lq_head].stat_cpr_deadlock_kluge)
+         n_cpr_deadlock_kluge++;
    }
    else {
       // SQ should not be empty.
@@ -787,6 +889,13 @@ void lsu::flush() {
 	lq_length = 0;
 
 	for (unsigned int i = 0; i < lq_size; i++) {
+        if (LQ[i].valid && LQ[i].addr_avail && !LQ[i].value_avail){
+            //dec prf usage_counter
+            if (proc->PAY.buf[LQ[i].pay_index].C_valid){
+                //FIXME: is this the right way to access the Payload buffer entry
+                proc->REN->dec_usage_counter(proc->PAY.buf[LQ[i].pay_index].C_phys_reg);
+            }
+        }
 		LQ[i].valid = false;
 	}
 
@@ -853,6 +962,9 @@ void lsu::dump_stats(FILE* fp) {
 	fprintf(fp, "  miss stall       = %d (%.2f%%)\n",
 	        n_stall_miss_l,
 	        100.0*(double)n_stall_miss_l/(double)n_load);
+    fprintf(fp, "cpr deadlock kluge = %d (%.2f%%)\n",
+           n_cpr_deadlock_kluge,
+           100.0*(double)n_cpr_deadlock_kluge/(double)n_load);
 
 	fprintf(fp, "STORES (retired)\n");
 	fprintf(fp, "  stores           = %d\n", n_store);

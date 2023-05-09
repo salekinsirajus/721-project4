@@ -32,73 +32,20 @@ void pipeline_t::writeback(unsigned int lane_number) {
       //   instructions in the frontend stages are automatically squashed since they are by definition
       //   logically after the branch.
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-      if (PAY.buf[index].checkpoint) {
-
-         if (PERFECT_BRANCH_PRED) {
-            // TODO: This assert fails due to asynchrony caused by HTIF ticks.
-            // A branch may have already went in the taken direction in ISA sim
-            // since a HTIF tick followed by CSR read instructions might have
-            // already updated the condition check source register for this branch.
-            // The same source register won't be updated until the corresponding HTIF
-            // tick has happened in micro_sim and the corresponding CSR instruction has
-            // retired in micro_sim. The CSR read instruction will force a recovery and
-            // the next time this branch is executed, it will calculate the right value.
-
-            //assert(PAY.buf[index].next_pc == PAY.buf[index].c_next_pc);
-            //assert((PAY.buf[index].next_pc == PAY.buf[index].c_next_pc) || !PAY.buf[index].good_instruction || SPEC_DISAMBIG);
-
-            // FIX_ME #15a
-            // The simulator is running in perfect branch prediction mode, therefore, all branches are correctly predicted.
-            // The assertion immediately above confirms that the prediction (next_pc is the predicted target)
-            // matches the outcome (c_next_pc is the calculated target).
-            //
-            // Tips:
-            // 1. At this point of the code, 'index' is the instruction's index into PAY.buf[] (payload).
-            // 2. Call the resolve() function of the renamer module so that it frees the branch's checkpoint.
-            //    Recall that the arguments to resolve() are:
-            //    * The branch's Active List index
-            //    * The branch's ID
-            //    * Whether or not the branch was predicted correctly: in this case it is correct
-            // 3. Do NOT worry about clearing the branch's bit in the branch masks of instructions in the pipeline.
-            //    This is unnecessary since instructions don't need accurate branch masks in perfect branch prediction
-            //    mode... since they are never selectively squashed by branches anyway.
-
-	    // FIX_ME #15a BEGIN
-        REN->resolve(PAY.buf[index].AL_index, PAY.buf[index].branch_ID, true);
-	    // FIX_ME #15a END
-         }
-         else if (PAY.buf[index].next_pc == PAY.buf[index].c_next_pc) {
-            // Branch was predicted correctly.
-
-            // FIX_ME #15b
-            // The simulator is running in real branch prediction mode, and the branch was correctly predicted.
-            // You can see this in the comparison above: the prediction (next_pc is the predicted target)
-            // matches the outcome (c_next_pc is the calculated target).
-            //
-            // Tips:
-            // 1. See #15a, item 1.
-            // 2. See #15a, item 2.
-            // 3. Clear the branch's bit in the branch masks of instructions in the pipeline.
-            //    To do this, call the resolve() function with the appropriate arguments. This function does the work for you.
-            //    * resolve() is a private function of the pipeline_t class, therefore, just call it literally as 'resolve'.
-            //    * resolve() takes two arguments. The first argument is the branch's ID. The second argument is a flag that
-            //      indicates whether or not the branch was predicted correctly: in this case it is correct.
-            //    * See pipeline.h for details about the two arguments of resolve().
-
-	    // FIX_ME #15b BEGIN
-        REN->resolve(PAY.buf[index].AL_index, PAY.buf[index].branch_ID, true);
-        resolve(PAY.buf[index].branch_ID, true);
-	    // FIX_ME #15b END
-         }
-         else {
-            // Branch was mispredicted.
+      if (PAY.buf[index].checkpoint){
+        if (PERFECT_BRANCH_PRED){
+            //do nothing
+        }
+        else if ((PAY.buf[index].good_instruction) && PAY.buf[index].next_pc == PAY.buf[index].c_next_pc){
+            //do nothing
+        }
+        else if ((PAY.buf[index].good_instruction) && PAY.buf[index].next_pc != PAY.buf[index].c_next_pc){ //branch misprediction
 
             // Roll-back the Fetch Unit.
             FetchUnit->mispredict(PAY.buf[index].pred_tag,
-	    			  (PAY.buf[index].c_next_pc != INCREMENT_PC(PAY.buf[index].pc)),
-				  PAY.buf[index].c_next_pc);
- 
+                      (PAY.buf[index].c_next_pc != INCREMENT_PC(PAY.buf[index].pc)),
+                       PAY.buf[index].c_next_pc);
+
             // FIX_ME #15c
             // The simulator is running in real branch prediction mode, and the branch was mispredicted.
             // Recall the two high-level steps that are necessary in this case:
@@ -116,10 +63,16 @@ void pipeline_t::writeback(unsigned int lane_number) {
             //    This will restore the RMT, FL, and AL, and also free this and future checkpoints... etc.
 
             // FIX_ME #15c BEGIN
-            REN->resolve(PAY.buf[index].AL_index, PAY.buf[index].branch_ID, false);
+            //REN->resolve(PAY.buf[index].AL_index, PAY.buf[index].branch_ID, false);
+            //WIP:
+            uint64_t chkpt_id = PAY.buf[index].checkpoint_ID;
+            uint64_t total_loads, total_stores, total_branches;
+            //using the next checkpoint for branch misprediction
+            uint64_t squash_mask = REN->rollback(chkpt_id, true, total_loads, total_stores, total_branches);
             // FIX_ME #15c END
 
             // Restore the LQ/SQ.
+            //printf("before calling LSU.restore rec_SQ_index: %d, PAY.head.SQ_index: %d\n", PAY.buf[index].SQ_index, PAY.buf[PAY.head].SQ_index);
             LSU.restore(PAY.buf[index].LQ_index, PAY.buf[index].LQ_phase, PAY.buf[index].SQ_index, PAY.buf[index].SQ_phase);
 
             // FIX_ME #15d
@@ -135,14 +88,15 @@ void pipeline_t::writeback(unsigned int lane_number) {
             //    * See pipeline.h for details about the two arguments of resolve().
 
             // FIX_ME #15d BEGIN
-            resolve(PAY.buf[index].branch_ID, false);
+            selective_squash(squash_mask);
             // FIX_ME #15d END
 
             // Rollback PAY to the point of the branch.
             PAY.rollback(index);
-         }
+            // resetting after a rollback
+            instr_renamed_since_last_checkpoint = 0;
+        }
       }
-
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
       // FIX_ME #16
       // Set completed bit in Active List.
@@ -153,7 +107,9 @@ void pipeline_t::writeback(unsigned int lane_number) {
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
       // FIX_ME #16 BEGIN
-      REN->set_complete(PAY.buf[index].AL_index);
+      //printf("%X: index: %d writeback::set_complete(%d)\n",PAY.buf[index].pc, index, PAY.buf[index].checkpoint_ID);
+      //if (PAY.buf[index].checkpoint_ID == 3) printf("rt: %X\n", PAY.buf[index].pc);
+      REN->set_complete(PAY.buf[index].checkpoint_ID);
       // FIX_ME #16 END
 
       //////////////////////////////////////////////////////////////////////////////////////////////////////////
